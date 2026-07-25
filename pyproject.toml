@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pannosovax-studio"
+version = "0.1.0"
+description = "Desktop/browser app for reproducible multi-epitope vaccine design without the command line"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "GPL-3.0-or-later" }
+authors = [{ name = "Louise Cerdeira" }]
+keywords = ["reverse-vaccinology", "multi-epitope", "immunoinformatics", "snakemake"]
+classifiers = [
+  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+  "Programming Language :: Python :: 3",
+  "Operating System :: MacOS",
+  "Operating System :: Microsoft :: Windows",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
+
+# Dependências de runtime do APP. O pipeline científico completo tem mais
+# ferramentas (BLAST, GROMACS, etc.) instaladas via environment.yml/conda.
+dependencies = [
+  "fastapi>=0.104",
+  "uvicorn>=0.24",
+  "pydantic>=2",
+  "pywebview>=4.4",
+  "snakemake>=7.32,<8",
+  "pandas>=2",
+  "biopython>=1.83",
+  "requests>=2.31",
+  "pyyaml>=6",
+  "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "httpx>=0.25", "pyinstaller>=6"]
+
+[project.urls]
+Homepage = "https://github.com/lcerdeira/pannosovax"
+Repository = "https://github.com/lcerdeira/pannosovax"
+
+# Ponto de entrada do app desktop (abre a janela nativa)
+[project.scripts]
+pannosovax-studio = "app.desktop:main"
+
+[tool.setuptools]
+packages = ["app"]
+
+[tool.setuptools.package-data]
+app = ["ui/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
