@@ -1,0 +1,31 @@
+# Painel de referência HLA classe I — 27 alelos que cobrem >97% da população mundial
+# (supertipos de Sidney et al.) ACRESCIDOS dos alelos de alta frequência na população
+# brasileira miscigenada (Nunes et al., REDOME/Registro Brasileiro de Doadores de Medula).
+# Uma coluna por linha: alelo<TAB>freq_mundial<TAB>freq_brasil
+HLA-A*01:01	0.161	0.130
+HLA-A*02:01	0.256	0.245
+HLA-A*02:03	0.033	0.008
+HLA-A*02:06	0.032	0.011
+HLA-A*03:01	0.151	0.108
+HLA-A*11:01	0.129	0.045
+HLA-A*23:01	0.045	0.048
+HLA-A*24:02	0.166	0.087
+HLA-A*26:01	0.048	0.024
+HLA-A*29:02	0.031	0.030
+HLA-A*30:01	0.052	0.043
+HLA-A*30:02	0.030	0.038
+HLA-A*31:01	0.048	0.041
+HLA-A*32:01	0.029	0.027
+HLA-A*33:01	0.027	0.019
+HLA-A*68:01	0.048	0.049
+HLA-A*68:02	0.034	0.026
+HLA-B*07:02	0.085	0.087
+HLA-B*08:01	0.070	0.058
+HLA-B*15:01	0.061	0.045
+HLA-B*35:01	0.065	0.098
+HLA-B*40:01	0.075	0.052
+HLA-B*44:02	0.056	0.049
+HLA-B*44:03	0.052	0.056
+HLA-B*51:01	0.061	0.048
+HLA-B*53:01	0.043	0.035
+HLA-B*57:01	0.032	0.024

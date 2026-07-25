@@ -1,0 +1,183 @@
+# ── PanNosoVax: configuração central ────────────────────────────────────────────
+# Todos os limiares ficam aqui. Nenhum número mágico dentro dos scripts.
+
+project: PanNosoVax
+outdir: results
+threads: 8
+
+# ── 01. Aquisição de genomas ───────────────────────────────────────────────────
+# Amostragem estratificada: queremos diversidade filogenética e geográfica, não
+# só as cepas de referência mais sequenciadas (viés de Europa/EUA).
+organisms:
+  kpsc:
+    label: "Klebsiella pneumoniae species complex"
+    taxids: [573, 1463165, 244366, 72407]   # K. pneumoniae, quasipneumoniae, variicola, ...
+    n_genomes: 400
+    assembly_level: [complete, chromosome]
+    reference: GCF_000240185.1               # HS11286
+  abau:
+    label: "Acinetobacter baumannii"
+    taxids: [470]
+    n_genomes: 300
+    assembly_level: [complete, chromosome]
+    reference: GCF_008632635.1               # ATCC 17978
+  spneu:
+    label: "Streptococcus pneumoniae"
+    taxids: [1313]
+    n_genomes: 400
+    assembly_level: [complete, chromosome]
+    reference: GCF_000007045.1               # R6
+
+# Estratificação da amostragem (proporção alvo por região; sobra vai para 'other')
+geographic_strata:
+  latin_america: 0.25
+  africa: 0.15
+  asia: 0.25
+  europe: 0.20
+  north_america: 0.15
+
+# ── 02. Pangenoma ──────────────────────────────────────────────────────────────
+pangenome:
+  tool: panaroo
+  clean_mode: strict
+  core_threshold: 0.95        # gene presente em >=95% dos genomas = core
+  identity: 0.95
+
+# ── 03. Surfaceome ─────────────────────────────────────────────────────────────
+surfaceome:
+  # Localizações aceitas por tipo de parede celular
+  gram_negative_ok: [OuterMembrane, Extracellular]
+  gram_positive_ok: [Cellwall, Extracellular]
+  psortb_min_score: 7.5
+  max_tm_helices: 1           # >1 hélice TM = difícil de expressar/solubilizar
+  min_length: 100
+  max_length: 1200
+  # Adesinas/porinas/receptores de sideróforo ganham bônus de prioridade
+  functional_boost_keywords:
+    - adhesin
+    - porin
+    - siderophore
+    - TonB-dependent
+    - pilus
+    - fimbri
+    - ABC transporter substrate-binding
+    - lipoprotein
+    - choline-binding
+    - sortase
+
+# ── 04. Conservação e seleção ──────────────────────────────────────────────────
+selection:
+  min_aa_identity_across_genomes: 0.90
+  dnds_max: 1.0               # queremos seleção purificadora
+  dnds_method: FEL            # HyPhy FEL por sítio
+  # Essencialidade: cruzamento com DEG e telas TraDIS/Tn-seq publicadas
+  essentiality_db: data/external/deg_essential.tsv
+  require_essential_or_virulence: true
+
+# ── 05. Epitopos ───────────────────────────────────────────────────────────────
+epitopes:
+  mhc1:
+    method: netmhcpan_ba
+    lengths: [9, 10]
+    percentile_rank_max: 1.0
+    alleles_file: config/alleles_mhc1.txt
+  mhc2:
+    method: netmhciipan_ba
+    lengths: [15]
+    percentile_rank_max: 2.0
+    alleles_file: config/alleles_mhc2.txt
+  bcell:
+    linear_method: bepipred2
+    linear_threshold: 0.55
+    min_len: 12
+    max_len: 22
+    conformational_method: discotope3
+  # Imunogenicidade e antigenicidade
+  vaxijen_threshold: 0.5      # bactéria
+  # Um epitopo só entra se for conservado em >= X% dos genomas do seu organismo
+  min_epitope_conservation: 0.95
+
+# ── 06. Segurança (triagem negativa) ───────────────────────────────────────────
+safety:
+  human_proteome: data/external/UP000005640_human.fasta
+  # Microbioma comensal: evita que a vacina derrube a flora protetora
+  commensal_proteomes:
+    - data/external/commensal_respiratory.fasta   # Neisseria lactamica, S. mitis, Moraxella spp...
+    - data/external/commensal_gut.fasta           # HMP representativos
+  max_identity_to_self: 0.80        # nível PEPTÍDICO: fração do epitopo idêntica a
+                                    # uma janela self/comensal (cobertura-normalizada).
+                                    # >80% = "essencialmente presente no self" -> descartado.
+                                    # NÃO é o 0.35 de proteína inteira: em 9-15mers isso
+                                    # zeraria tudo (ver worst_hit em 06_safety_screen.py).
+                                    # Autoimunidade por 7-mer exato fica na camada B.
+  min_evalue_self: 1e-4
+  allergen_check: true
+  toxin_check: true
+  # Mimetismo autoimune: motivos de 7-mer idênticos a proteínas humanas
+  max_shared_kmer: 6
+
+# ── 07. Cobertura populacional ─────────────────────────────────────────────────
+coverage:
+  target_global: 0.90
+  target_brazil: 0.90
+  populations:
+    - World
+    - South America
+    - Brazil
+    - Central Africa
+    - Southeast Asia
+    - Europe
+
+# ── 08. Construto ──────────────────────────────────────────────────────────────
+construct:
+  # Adjuvante molecular fundido na N-terminal. RS09 é agonista sintético de TLR4;
+  # alternativas: flagelina FliC (D1), HBHA, beta-defensina 2 humana.
+  adjuvant: RS09              # APPHALS
+  adjuvant_linker: EAAAK
+  linkers:
+    mhc1: AAY
+    mhc2: GPGPG
+    bcell: KK
+  his_tag: true
+  # Cisteína livre ímpar -> dissulfeto aberrante em E. coli. Exclui epitopos com Cys
+  # da seleção (07) e do bloco B (08) para um construto sem cisteína livre.
+  exclude_free_cysteine: true
+  # PADRE aumenta ajuda de T CD4 de forma promíscua entre HLA-DR
+  include_padre: true
+  # Ordem dos blocos no construto
+  block_order: [adjuvant, padre, bcell, mhc2, mhc1, shared]
+
+# ── 09-11. Estrutura, docking, simulação ───────────────────────────────────────
+structure:
+  folding: colabfold          # AlphaFold2 via ColabFold (gratuito no Colab)
+  refine: galaxyrefine
+  validate: [ramachandran, errat, verify3d]
+  # 04b (exploratório): TM-score acima do qual duas proteínas têm a mesma dobra.
+  structural_tm_threshold: 0.5
+docking:
+  receptors:
+    TLR4: 4G8A
+    TLR2: 2Z7X
+    MHCII_DRB1_0101: 1DLH
+  engine: haddock2.4
+md:
+  engine: gromacs
+  forcefield: charmm36-jul2022
+  water: tip3p
+  ns: 100
+  replicates: 3
+immunosim:
+  tool: c-immsim
+  doses: 3
+  interval_days: 28
+  simulation_steps: 1050
+
+# ── 12. Expressão ──────────────────────────────────────────────────────────────
+expression:
+  host: ecoli_k12
+  vector: pET28a
+  restriction_avoid: [XhoI, BamHI, NdeI, EcoRI]
+  target_cai_min: 0.8
+  gc_range: [0.30, 0.70]
+  # Alternativa de plataforma: mRNA-LNP (mesma sequência de aa, UTRs otimizados)
+  also_design_mrna: true

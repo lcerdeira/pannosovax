@@ -1,0 +1,49 @@
+# ── Dados e saídas (grandes / reproduzíveis pelo pipeline) ──────────────────
+/results/
+/data/
+
+# ── Modelos / caches pesados ────────────────────────────────────────────────
+*.pt
+*.pth
+*.h5
+.cache/
+**/hf_cache/
+**/checkpoints/
+
+# ── Binários compilados (fornecer instruções de build, não o binário) ───────
+tools/TMalign
+tools/*.o
+*.so
+
+# ── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# ── Manuscrito: fontes versionam, binários não ──────────────────────────────
+manuscript/_arquivo/
+*.docx
+*.pdf
+
+# ── Ambiente / editor / SO ──────────────────────────────────────────────────
+.DS_Store
+.claude/
+.idea/
+.vscode/
+*.log
+scratchpad/
+
+# ── App (futuros artefatos de build) ────────────────────────────────────────
+app/dist/
+app/build/
+node_modules/
+
+# Projeto separado (plataforma nanopore) — repo próprio
+/luisa-shield/

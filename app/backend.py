@@ -1,0 +1,156 @@
+#!/usr/bin/env python3
+"""PanNosoVax Studio — backend local.
+
+Fatia vertical da arquitetura: a UI fala com esta API, que dirige o Snakemake.
+Nada de reimplementar pipeline: as regras do workflow/Snakefile continuam sendo
+a fonte da verdade (DAG, retomada e provenance vêm de graça).
+
+Endpoints:
+    GET  /api/stages        -> etapas, descrição e se estão pendentes (dry-run)
+    POST /api/run           -> dispara execução de etapas selecionadas
+    GET  /api/status        -> estado do job corrente
+    GET  /api/log           -> últimas linhas do log
+    POST /api/cancel        -> encerra o job corrente
+
+Uso (dev):  python app/backend.py    → http://127.0.0.1:8765
+"""
+from __future__ import annotations
+
+import os
+import re
+import signal
+import subprocess
+import sys
+import threading
+from collections import deque
+from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+ROOT = Path(__file__).resolve().parent.parent
+SNAKEFILE = ROOT / "workflow" / "Snakefile"
+PY = sys.executable
+
+# Etapas expostas na v1. Deliberadamente NÃO expomos as que exigem passo manual
+# (estrutura 3D, MD, imunossimulação): elas geram "pacote para submissão" e
+# entram numa v2, para não prometer ao usuário algo que trava no meio.
+STAGES = [
+    ("epitopes",  "Predição de epitopos",   "B, MHC-I e MHC-II via IEDB. Lento (horas) — retomável."),
+    ("safety",    "Triagem de segurança",   "Self humano, mimetismo 7-mer e microbioma comensal."),
+    ("coverage",  "Cobertura populacional", "Conjunto mínimo que maximiza cobertura HLA."),
+    ("construct", "Montagem do construto",  "Adjuvante, linkers e blocos de epitopos."),
+    ("physchem",  "Físico-química",         "MW, pI, GRAVY, instabilidade, solubilidade."),
+    ("expression","Expressão e códon",      "Otimização para E. coli e variante mRNA."),
+    ("report",    "Figuras e tabelas",      "Gera as figuras do relatório."),
+]
+
+app = FastAPI(title="PanNosoVax Studio")
+
+_job: dict = {"proc": None, "stages": [], "state": "idle", "returncode": None}
+_log: deque[str] = deque(maxlen=800)
+_lock = threading.Lock()
+
+
+def _snakemake(*args: str) -> list[str]:
+    return [PY, "-m", "snakemake", "-s", str(SNAKEFILE), "-d", str(ROOT), *args]
+
+
+def _pending() -> set[str]:
+    """Etapas que o Snakemake ainda executaria (dry-run)."""
+    try:
+        out = subprocess.run(_snakemake("-n", "--quiet"), capture_output=True,
+                             text=True, timeout=180, cwd=ROOT).stdout
+    except Exception:
+        return set()
+    pend, in_table = set(), False
+    for line in out.splitlines():
+        if re.match(r"^job\s+count", line):
+            in_table = True
+            continue
+        if in_table:
+            m = re.match(r"^(\w[\w_]*)\s+\d+$", line.strip())
+            if m:
+                pend.add(m.group(1))
+    return pend
+
+
+@app.get("/api/stages")
+def stages():
+    pend = _pending()
+    return {"stages": [{"id": s, "name": n, "help": h, "pending": s in pend} for s, n, h in STAGES]}
+
+
+class RunReq(BaseModel):
+    stages: list[str]
+    cores: int = 4
+
+
+def _pump(proc: subprocess.Popen):
+    for line in iter(proc.stdout.readline, ""):
+        _log.append(line.rstrip())
+    proc.wait()
+    with _lock:
+        _job["state"] = "done" if proc.returncode == 0 else "error"
+        _job["returncode"] = proc.returncode
+
+
+@app.post("/api/run")
+def run(req: RunReq):
+    with _lock:
+        if _job["state"] == "running":
+            return {"ok": False, "error": "Já existe uma execução em andamento."}
+        valid = [s for s in req.stages if s in {x[0] for x in STAGES}]
+        if not valid:
+            return {"ok": False, "error": "Nenhuma etapa válida selecionada."}
+        _log.clear()
+        proc = subprocess.Popen(
+            _snakemake("--cores", str(req.cores), "--rerun-incomplete", *valid),
+            cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, bufsize=1, preexec_fn=os.setsid if os.name != "nt" else None)
+        _job.update(proc=proc, stages=valid, state="running", returncode=None)
+        threading.Thread(target=_pump, args=(proc,), daemon=True).start()
+    return {"ok": True, "stages": valid}
+
+
+@app.get("/api/status")
+def status():
+    return {"state": _job["state"], "stages": _job["stages"], "returncode": _job["returncode"]}
+
+
+@app.get("/api/log")
+def log(tail: int = 200):
+    return {"lines": list(_log)[-tail:]}
+
+
+@app.post("/api/cancel")
+def cancel():
+    with _lock:
+        proc = _job.get("proc")
+        if proc and _job["state"] == "running":
+            try:
+                if os.name != "nt":
+                    os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                else:
+                    proc.terminate()
+            except Exception as exc:
+                return {"ok": False, "error": str(exc)}
+            _job["state"] = "cancelled"
+            return {"ok": True}
+    return {"ok": False, "error": "Nada em execução."}
+
+
+UI = Path(__file__).resolve().parent / "ui"
+if UI.is_dir():
+    app.mount("/ui", StaticFiles(directory=UI), name="ui")
+
+    @app.get("/")
+    def index():
+        return FileResponse(UI / "index.html")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=8765, log_level="warning")

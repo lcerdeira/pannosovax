@@ -1,0 +1,39 @@
+name: pannosovax
+channels: [conda-forge, bioconda, defaults]
+dependencies:
+  - python=3.11
+  - snakemake-minimal>=8
+  - biopython>=1.83
+  - pandas
+  - numpy
+  - scipy
+  - matplotlib
+  - seaborn
+  - requests
+  - pyyaml
+  - tqdm
+  # aquisição
+  - ncbi-datasets-cli
+  - ncbi-genome-download
+  # anotação e pangenoma
+  - bakta
+  - prokka
+  - panaroo
+  - cd-hit
+  # alinhamento / filogenia / seleção
+  - mafft
+  - iqtree
+  - hyphy
+  - blast
+  - diamond
+  - seqkit
+  # localização subcelular / topologia
+  - psortb
+  - signalp6            # requer aceite de licença acadêmica (gratuita)
+  - tmhmm               # alternativa livre: DeepTMHMM via API
+  # estrutura e MD
+  - gromacs
+  - pymol-open-source
+  # análise
+  - r-base
+  - r-tidyverse
