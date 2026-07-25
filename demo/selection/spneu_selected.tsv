@@ -1,0 +1,4 @@
+accession	organism	strain	level	country	collection_date	host	isolation_source	release_date	contig_n50	total_length	region
+GCF_900692555.1	Streptococcus pneumoniae	GPSC105 substr. ST5623	Chromosome	Peru	2006	Homo sapiens	blood	2019-02-20	161610	2067311	latin_america
+GCF_900692575.1	Streptococcus pneumoniae	GPSC115 substr. ST1662	Chromosome	Peru	2007	Homo sapiens	Pleural Fluid	2019-02-20	127237	2091966	latin_america
+GCF_900693085.1	Streptococcus pneumoniae	GPSC131 substr. ST3669	Chromosome	Peru	2008	Homo sapiens	NP Swab	2019-02-20	236648	2019985	latin_america

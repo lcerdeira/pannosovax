@@ -1,5 +1,6 @@
 # ── Dados e saídas (grandes / reproduzíveis pelo pipeline) ──────────────────
 /results/
+/results_demo/
 /data/
 
 # ── Modelos / caches pesados ────────────────────────────────────────────────

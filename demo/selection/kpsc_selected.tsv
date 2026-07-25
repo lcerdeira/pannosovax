@@ -1,0 +1,4 @@
+accession	organism	strain	level	country	collection_date	host	isolation_source	release_date	contig_n50	total_length	region
+GCF_020525545.1	Klebsiella variicola subsp. variicola	F2R9T	Complete Genome	Mexico	unknown	Banana	root	2021-10-19	5521194	5521194	latin_america
+GCF_051122745.1	Klebsiella quasipneumoniae subsp. similipneumoniae	T11	Complete Genome	Brazil: Barueri	2024-05-14		Sewage treatment plant	2025-06-27	5335503	5776415	latin_america
+GCF_041217655.1	Klebsiella pneumoniae subsp. pneumoniae	N4214030	Complete Genome	Brazil: Sao Paulo	2021-06	Homo sapiens	sacral ulcer	2024-08-12	5499356	5898875	latin_america

@@ -1,0 +1,4 @@
+accession	organism	strain	level	country	collection_date	host	isolation_source	release_date	contig_n50	total_length	region
+GCF_051294685.1	Acinetobacter baumannii	600BC	Complete Genome	Mexico	2017	Homo sapiens	blood	2025-07-10	4142518	4166620	latin_america
+GCF_024139075.1	Acinetobacter baumannii	UC24137	Complete Genome	Chile:Santiago	2011	Homo sapiens	sacrum ulcer	2022-07-05	3970830	4093548	latin_america
+GCF_052216905.1	Acinetobacter baumannii	INC421	Complete Genome	Mexico: Estado de Mexico Santo Tomas de las Flores	2023-08-17	Homo sapiens	blood	2025-08-23	3853760	4000495	latin_america
