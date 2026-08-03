@@ -1,5 +1,8 @@
 # PanNosoVax — POC de vacina multi-epitopo pan-nosocomial *in silico*
 
+[![build](https://github.com/lcerdeira/pannosovax/actions/workflows/build.yml/badge.svg)](https://github.com/lcerdeira/pannosovax/actions/workflows/build.yml)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
+
 Desenho, do zero e com custo próximo de zero, de um imunógeno quimérico contra os três
 principais agentes de pneumonia nosocomial e adquirida na comunidade com resistência
 crescente: **Klebsiella pneumoniae species complex (KpSC)**, **Acinetobacter baumannii**

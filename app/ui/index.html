@@ -6,7 +6,7 @@
 <title>PanNosoVax Studio</title>
 <style>
   :root{
-    --bg:#F5F7FA; --panel:#FFFFFF; --ink:#16202E; --sub:#5C6A7A; --line:#DFE5EC;
+    --bg:#F4F6F9; --panel:#FFFFFF; --ink:#141A24; --sub:#5B6675; --line:#DFE5EC;
     --blue:#3B6EA5; --teal:#2A9D8F; --red:#D1495B; --amber:#C97F1A;
   }
   @media (prefers-color-scheme:dark){
@@ -15,107 +15,195 @@
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);
     font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-  .wrap{max-width:900px;margin:0 auto;padding:28px 20px 60px}
-  header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
-  h1{font-size:1.6rem;margin:0;letter-spacing:-.01em}
-  .tag{font:600 11px ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;
-    color:var(--teal)}
-  p.lede{color:var(--sub);margin:6px 0 24px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;
-    margin-bottom:18px}
+  .wrap{max-width:920px;margin:0 auto;padding:22px 20px 60px}
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:18px}
+  h1{font-size:1.4rem;margin:0;letter-spacing:-.01em}
+  .tag{font:600 10.5px ui-monospace,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--teal)}
+  nav{display:flex;gap:4px;margin-left:auto;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:4px}
+  nav button{font:600 13px inherit;padding:7px 14px;border:none;border-radius:7px;background:none;
+    color:var(--sub);cursor:pointer}
+  nav button.active{background:var(--blue);color:#fff}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:16px}
   h2{font-size:1.02rem;margin:0 0 12px}
+  .view{display:none}.view.active{display:block}
+  /* projeto */
+  .orgs{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 4px}
+  .org{border:1px solid var(--line);border-radius:10px;padding:10px 14px;background:var(--bg)}
+  .org b{display:block;font-style:italic}
+  .org span{font-size:.8rem;color:var(--sub)}
+  .muted{color:var(--sub);font-size:.9rem}
+  /* etapas */
   .stage{display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--line)}
   .stage:first-of-type{border-top:none}
   .stage input{margin-top:3px;width:17px;height:17px;flex:none;accent-color:var(--blue)}
-  .stage .n{font-weight:600}
-  .stage .h{color:var(--sub);font-size:.88rem}
-  .pill{font:600 10.5px ui-monospace,monospace;padding:2px 8px;border-radius:99px;margin-left:8px;
-    vertical-align:1px}
+  .stage .n{font-weight:600}.stage .h{color:var(--sub);font-size:.87rem}
+  .pill{font:600 10.5px ui-monospace,monospace;padding:2px 8px;border-radius:99px;margin-left:8px}
   .pend{background:color-mix(in srgb,var(--amber) 16%,transparent);color:var(--amber)}
   .done{background:color-mix(in srgb,var(--teal) 16%,transparent);color:var(--teal)}
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  button{font:600 14px inherit;padding:10px 18px;border-radius:9px;border:1px solid transparent;
-    cursor:pointer}
-  .primary{background:var(--blue);color:#fff}
-  .primary:disabled{opacity:.5;cursor:not-allowed}
-  .ghost{background:transparent;border-color:var(--line);color:var(--ink)}
-  #log{background:#0B121B;color:#CBD6E2;font:12px/1.5 ui-monospace,monospace;padding:14px;
-    border-radius:9px;height:280px;overflow:auto;white-space:pre-wrap}
+  button.primary{background:var(--blue);color:#fff;font:600 14px inherit;padding:10px 18px;border:none;border-radius:9px;cursor:pointer}
+  button.primary:disabled{opacity:.5;cursor:not-allowed}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);font:600 14px inherit;padding:10px 18px;border-radius:9px;cursor:pointer}
+  #log{background:#0B121B;color:#CBD6E2;font:12px/1.5 ui-monospace,monospace;padding:14px;border-radius:9px;height:260px;overflow:auto;white-space:pre-wrap}
   .state{font-weight:600}
   .warn{color:var(--amber);font-size:.88rem;margin-top:10px}
+  /* resultados */
+  .tiles{display:flex;gap:12px;flex-wrap:wrap}
+  .tile{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px 16px;min-width:120px}
+  .tile b{display:block;font-size:1.5rem;font-variant-numeric:tabular-nums}
+  .tile span{font-size:.76rem;color:var(--sub)}
+  .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-top:6px}
+  .gallery figure{margin:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel);cursor:zoom-in}
+  .gallery img{width:100%;display:block;background:#0E1420}
+  .gallery figcaption{padding:8px 10px;font-size:.82rem;color:var(--sub)}
+  #modal{position:fixed;inset:0;background:rgba(6,10,16,.85);display:none;align-items:center;justify-content:center;padding:24px;cursor:zoom-out;z-index:10}
+  #modal img{max-width:100%;max-height:100%;border-radius:8px}
+  .empty{color:var(--sub);text-align:center;padding:30px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <h1>PanNosoVax Studio</h1><span class="tag">desenho de vacina multi-epitopo</span>
+    <h1>PanNosoVax Studio</h1><span class="tag" id="proj">…</span>
+    <nav>
+      <button data-v="projeto" class="active">Projeto</button>
+      <button data-v="execucao">Execução</button>
+      <button data-v="resultados">Resultados</button>
+    </nav>
   </header>
-  <p class="lede">Escolha o que deseja executar. O sistema retoma de onde parou — pode fechar
-    e voltar depois.</p>
 
-  <div class="card">
-    <h2>Etapas</h2>
-    <div id="stages">carregando…</div>
-    <p class="warn" id="warn" hidden>⚠ A predição de epitopos consulta o servidor IEDB e pode
-      levar <b>horas</b>. O progresso é salvo continuamente.</p>
-  </div>
-
-  <div class="card">
-    <div class="row">
-      <button class="primary" id="run">Executar selecionadas</button>
-      <button class="ghost" id="cancel">Cancelar</button>
-      <span>Estado: <span class="state" id="state">ocioso</span></span>
+  <!-- PROJETO -->
+  <section class="view active" id="v-projeto">
+    <div class="card">
+      <h2>Alvos</h2>
+      <div class="orgs" id="orgs">carregando…</div>
+      <p class="muted">Nicho clínico: pneumonia nosocomial. Apenas antígenos <b>core de
+        superfície</b> (nunca capsulares) → independência de sorotipo.</p>
     </div>
-  </div>
+    <div class="card">
+      <h2>Como funciona</h2>
+      <p class="muted">O Studio dirige um pipeline reproduzível (Snakemake): ele executa só o
+        que falta e <b>retoma de onde parou</b> — pode fechar e voltar depois. Vá para
+        <b>Execução</b> para escolher e rodar as etapas.</p>
+      <div class="row" style="margin-top:12px">
+        <button class="primary" onclick="show('execucao')">Ir para Execução →</button>
+      </div>
+    </div>
+  </section>
 
-  <div class="card">
-    <h2>Registro de execução</h2>
-    <div id="log">—</div>
-  </div>
+  <!-- EXECUÇÃO -->
+  <section class="view" id="v-execucao">
+    <div class="card">
+      <h2>Etapas</h2>
+      <div id="stages">carregando…</div>
+      <p class="warn" id="warn" hidden>⚠ A predição de epitopos consulta o servidor IEDB e pode
+        levar <b>horas</b>. O progresso é salvo continuamente.</p>
+    </div>
+    <div class="card">
+      <div class="row">
+        <button class="primary" id="run">Executar selecionadas</button>
+        <button class="ghost" id="cancel">Cancelar</button>
+        <span>Estado: <span class="state" id="stateTxt">ocioso</span></span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Registro de execução</h2>
+      <div id="log">—</div>
+    </div>
+  </section>
+
+  <!-- RESULTADOS -->
+  <section class="view" id="v-resultados">
+    <div class="card">
+      <h2>Resumo</h2>
+      <div class="tiles" id="tiles"><span class="muted">sem resultados ainda</span></div>
+    </div>
+    <div class="card">
+      <h2>Figuras</h2>
+      <div class="gallery" id="gallery"><div class="empty">Rode a etapa “Figuras e tabelas”
+        para gerar as figuras.</div></div>
+    </div>
+  </section>
 </div>
+
+<div id="modal"><img id="modalImg" alt=""></div>
 
 <script>
 const $ = s => document.querySelector(s);
 let timer = null;
 
+function show(v){
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('active', b.dataset.v===v));
+  document.querySelectorAll('.view').forEach(s=>s.classList.toggle('active', s.id==='v-'+v));
+  if (v==='resultados') loadResults();
+}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>show(b.dataset.v));
+
+async function loadProject(){
+  const d = await fetch('/api/project').then(r=>r.json());
+  $('#proj').textContent = d.name || 'PanNosoVax';
+  $('#orgs').innerHTML = (d.organisms||[]).map(o=>
+    `<div class="org"><b>${o.label}</b><span>${o.n_genomes||'?'} genomas</span></div>`).join('')
+    || '<span class="muted">config não encontrada</span>';
+}
+
 async function loadStages(){
-  const r = await fetch('/api/stages'); const d = await r.json();
-  $('#stages').innerHTML = d.stages.map(s => `
+  const d = await fetch('/api/stages').then(r=>r.json());
+  $('#stages').innerHTML = d.stages.map(s=>`
     <label class="stage">
-      <input type="checkbox" value="${s.id}" ${s.pending ? 'checked' : ''}>
-      <span>
-        <span class="n">${s.name}</span>
+      <input type="checkbox" value="${s.id}" ${s.pending?'checked':''}>
+      <span><span class="n">${s.name}</span>
         <span class="pill ${s.pending?'pend':'done'}">${s.pending?'pendente':'concluída'}</span>
-        <br><span class="h">${s.help}</span>
-      </span>
+        <br><span class="h">${s.help}</span></span>
     </label>`).join('');
-  $('#warn').hidden = !d.stages.some(s => s.id==='epitopes' && s.pending);
+  $('#warn').hidden = !d.stages.some(s=>s.id==='epitopes' && s.pending);
 }
 
 async function poll(){
   const [st, lg] = await Promise.all([
     fetch('/api/status').then(r=>r.json()), fetch('/api/log').then(r=>r.json())]);
-  const map = {idle:'ocioso', running:'executando…', done:'concluído', error:'erro',
-               cancelled:'cancelado'};
-  $('#state').textContent = map[st.state] || st.state;
-  if (lg.lines.length){ const el=$('#log'); el.textContent = lg.lines.join('\n');
-    el.scrollTop = el.scrollHeight; }
-  $('#run').disabled = st.state === 'running';
-  if (st.state !== 'running' && timer){ clearInterval(timer); timer=null; loadStages(); }
+  const map={idle:'ocioso',running:'executando…',done:'concluído',error:'erro',cancelled:'cancelado'};
+  $('#stateTxt').textContent = map[st.state]||st.state;
+  if (lg.lines.length){ const el=$('#log'); el.textContent=lg.lines.join('\n'); el.scrollTop=el.scrollHeight; }
+  $('#run').disabled = st.state==='running';
+  if (st.state!=='running' && timer){ clearInterval(timer); timer=null; loadStages(); }
 }
 
 $('#run').onclick = async () => {
-  const stages = [...document.querySelectorAll('#stages input:checked')].map(i=>i.value);
-  if (!stages.length) return alert('Selecione ao menos uma etapa.');
-  const r = await fetch('/api/run', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({stages})}).then(r=>r.json());
-  if (!r.ok) return alert(r.error);
-  if (!timer) timer = setInterval(poll, 1500);
-  poll();
+  const stages=[...document.querySelectorAll('#stages input:checked')].map(i=>i.value);
+  if(!stages.length) return alert('Selecione ao menos uma etapa.');
+  const r=await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({stages})}).then(r=>r.json());
+  if(!r.ok) return alert(r.error);
+  if(!timer) timer=setInterval(poll,1500); poll();
 };
 $('#cancel').onclick = async () => { await fetch('/api/cancel',{method:'POST'}); poll(); };
 
-loadStages(); poll();
+async function loadResults(){
+  const r = await fetch('/api/results').then(r=>r.json());
+  const t=[];
+  if(r.construct) t.push(['Construto', r.construct.length+' aa']);
+  if(r.physchem){
+    if(r.physchem.molecular_weight_kda) t.push(['Massa', r.physchem.molecular_weight_kda.toFixed(1)+' kDa']);
+    if(r.physchem.theoretical_pi) t.push(['pI', r.physchem.theoretical_pi.toFixed(1)]);
+    if(r.physchem.instability_index!=null) t.push(['Instabilidade', r.physchem.instability_index.toFixed(1)]);
+    if(r.physchem.n_cysteine!=null) t.push(['Cisteínas', r.physchem.n_cysteine]);
+  }
+  $('#tiles').innerHTML = t.length
+    ? t.map(([l,v])=>`<div class="tile"><b>${v}</b><span>${l}</span></div>`).join('')
+    : '<span class="muted">sem resultados ainda — rode até a montagem do construto</span>';
+
+  const f = await fetch('/api/figures').then(r=>r.json());
+  $('#gallery').innerHTML = f.figures.length
+    ? f.figures.map(x=>`<figure onclick="zoom('${x.url}')">
+        <img src="${x.url}" alt="${x.caption}"><figcaption>${x.caption}</figcaption></figure>`).join('')
+    : '<div class="empty">Rode a etapa “Figuras e tabelas” para gerar as figuras.</div>';
+}
+function zoom(url){ $('#modalImg').src=url; $('#modal').style.display='flex'; }
+$('#modal').onclick = () => { $('#modal').style.display='none'; };
+
+loadProject(); loadStages(); poll();
 </script>
 </body>
 </html>

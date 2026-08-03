@@ -6,11 +6,15 @@ Nada de reimplementar pipeline: as regras do workflow/Snakefile continuam sendo
 a fonte da verdade (DAG, retomada e provenance vêm de graça).
 
 Endpoints:
+    GET  /api/project       -> nome, organismos e config do projeto
     GET  /api/stages        -> etapas, descrição e se estão pendentes (dry-run)
     POST /api/run           -> dispara execução de etapas selecionadas
     GET  /api/status        -> estado do job corrente
     GET  /api/log           -> últimas linhas do log
     POST /api/cancel        -> encerra o job corrente
+    GET  /api/results       -> números-chave do run (construto, físico-química)
+    GET  /api/figures       -> figuras disponíveis
+    GET  /api/figure/{name} -> serve uma figura PNG
 
 Uso (dev):  python app/backend.py    → http://127.0.0.1:8765
 """
@@ -140,6 +144,87 @@ def cancel():
             _job["state"] = "cancelled"
             return {"ok": True}
     return {"ok": False, "error": "Nada em execução."}
+
+
+# ── Projeto: informação de config para a tela inicial ───────────────────────
+FIGDIR = ROOT / "results" / "report" / "figures"
+CONFIG = ROOT / "config" / "config.yaml"
+ORG_LABELS = {"kpsc": "K. pneumoniae (KpSC)", "abau": "A. baumannii",
+              "spneu": "S. pneumoniae"}
+
+
+@app.get("/api/project")
+def project():
+    import yaml
+    info = {"name": "PanNosoVax", "organisms": [], "outdir": "results", "has_results": False}
+    try:
+        cfg = yaml.safe_load(CONFIG.read_text())
+        info["name"] = cfg.get("project", "PanNosoVax")
+        info["outdir"] = cfg.get("outdir", "results")
+        info["organisms"] = [{"id": o, "label": ORG_LABELS.get(o, o),
+                              "n_genomes": cfg["organisms"][o].get("n_genomes")}
+                             for o in cfg.get("organisms", {})]
+    except Exception as exc:  # noqa: BLE001
+        info["error"] = str(exc)
+    info["has_results"] = (ROOT / "results" / "08_construct" / "construct.fasta").exists()
+    return info
+
+
+# ── Resultados: resumo e figuras ────────────────────────────────────────────
+FIG_CAPTIONS = {
+    "F0_graphical_abstract": "Resumo gráfico",
+    "F1_funil_epitopos": "Atrição de epitopos",
+    "F2_triagem_seguranca": "Triagem de segurança",
+    "F3_cobertura_populacional": "Cobertura HLA (mundo vs Brasil)",
+    "F4_construto": "Arquitetura do construto",
+    "F5_crossmatch_estrutural": "Convergência estrutural",
+    "F6_molecula": "Modelo 3D do imunógeno",
+    "F8_pan_nosocomial": "Um imunógeno, três patógenos",
+}
+
+
+@app.get("/api/results")
+def results_summary():
+    """Números-chave do run, se existirem (não inventa nada)."""
+    import pandas as pd
+    out = {"available": False, "construct": None, "physchem": None}
+    fasta = ROOT / "results" / "08_construct" / "construct.fasta"
+    if fasta.exists():
+        seq = "".join(l for l in fasta.read_text().splitlines() if not l.startswith(">"))
+        out["construct"] = {"length": len(seq)}
+        out["available"] = True
+    pc = ROOT / "results" / "09_physchem" / "construct_properties.tsv"
+    if pc.exists():
+        try:
+            d = pd.read_csv(pc, sep="\t").iloc[0]
+            out["physchem"] = {k: (float(d[k]) if k in d else None) for k in
+                               ["molecular_weight_kda", "theoretical_pi",
+                                "instability_index", "gravy", "n_cysteine"]}
+        except Exception:  # noqa: BLE001
+            pass
+    return out
+
+
+@app.get("/api/figures")
+def figures():
+    figs = []
+    if FIGDIR.is_dir():
+        for p in sorted(FIGDIR.glob("*.png")):
+            stem = p.stem
+            figs.append({"name": stem,
+                         "caption": FIG_CAPTIONS.get(stem, stem.replace("_", " ")),
+                         "url": f"/api/figure/{stem}"})
+    return {"figures": figs}
+
+
+@app.get("/api/figure/{name}")
+def figure(name: str):
+    # sanitiza: só nome-base, sem travessia de diretório
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "", name)
+    p = FIGDIR / f"{safe}.png"
+    if not p.exists():
+        return {"error": "figura não encontrada"}
+    return FileResponse(p, media_type="image/png")
 
 
 UI = Path(__file__).resolve().parent / "ui"
