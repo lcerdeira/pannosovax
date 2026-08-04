@@ -37,6 +37,39 @@ def core_faa(org: str) -> Path:
     return ROOT / f"results/02_pangenome/{org}_core_proteins.faa"
 
 
+# Localizações que contam como "acessível a anticorpo" por tipo de parede.
+SURFACE_LOC = {"kpsc": {"OuterMembrane", "Extracellular"},
+               "abau": {"OuterMembrane", "Extracellular"},
+               "spneu": {"Cellwall", "Extracellular"}}
+
+
+def surface_subset(org: str, fasta: Path) -> Path:
+    """FASTA só com as proteínas que o DeepLocPro localizou na superfície.
+
+    SignalP-6 e DeepTMHMM rodam na nuvem (BioLib), onde cada job tem ~15 min de
+    overhead e há tempo-limite. Submeter o proteoma core inteiro (~7.800 seqs) é
+    inviável — e desnecessário: a localização já elimina ~94%. Rodamos as duas
+    ferramentas apenas no subconjunto de superfície, que é o que entra no construto.
+    """
+    import re
+    from Bio import SeqIO
+    psortb = out_tsv(org, "psortb")
+    if not psortb.exists():
+        log.warning("%s: sem %s — rode --tool deeploc primeiro; usando o core inteiro",
+                    org, psortb.name)
+        return fasta
+    txt = psortb.read_text()
+    keep = {p for p, loc, _ in
+            re.findall(r"SeqID: (\S+)\n  Final Prediction:\n  (\S+) ([\d.]+)", txt)
+            if loc in SURFACE_LOC[org]}
+    dst = out_tsv(org, "_surface_subset").with_suffix(".faa")
+    recs = [r for r in SeqIO.parse(fasta, "fasta") if r.id in keep]
+    SeqIO.write(recs, dst, "fasta")
+    log.info("%s: subconjunto de superfície = %d de %d proteínas core",
+             org, len(recs), sum(1 for _ in SeqIO.parse(fasta, "fasta")))
+    return dst
+
+
 def out_tsv(org: str, name: str) -> Path:
     p = ROOT / f"results/03_surfaceome/{org}_{name}.tsv"
     p.parent.mkdir(parents=True, exist_ok=True)
@@ -63,60 +96,98 @@ def run_deeploc(org: str, fasta: Path):
     log.info("%s: DeepLocPro -> %s (%d proteínas)", org, dst.name, len(df))
 
 
-# ── SignalP-6 (BioLib) -> tabular que parse_signalp espera ───────────────────
-def run_signalp(org: str, fasta: Path):
-    import biolib, pandas as pd
-    work = Path(tempfile.mkdtemp())
-    local = work / "in.faa"
-    shutil.copy(fasta, local)
-    prev = os.getcwd(); os.chdir(work)
-    try:
-        app = biolib.load("DTU/SignalP-6")
-        job = app.cli(args="--fastafile in.faa --organism other --format txt --output_dir output")
-        job.get_stdout()
-        outdir = work / "sp"
-        job.save_files(str(outdir))
-        pred = next(outdir.rglob("prediction_results.txt"))
-    finally:
-        os.chdir(prev)
-    rows = []
-    for line in pred.read_text().splitlines():
-        if line.startswith("#") or not line.strip():
-            continue
-        p = line.split("\t")
-        pid = p[0].split()[0]
-        prediction = p[1].strip()           # OTHER/SP/LIPO/TAT/TATLIPO/PILIN
-        # colunas que parse_signalp lê: protein_id, prediction, p_other, p_sp, p_lipo, p_tat, cs
-        p_other = p[2] if len(p) > 2 else "0"
-        p_sp = p[3] if len(p) > 3 else "0"
-        p_lipo = p[4] if len(p) > 4 else "0"
-        p_tat = p[5] if len(p) > 5 else "0"
-        cs = p[-1] if "CS pos" in line else ""
-        rows.append([pid, prediction, p_other, p_sp, p_lipo, p_tat, cs])
-    dst = out_tsv(org, "signalp")
-    pd.DataFrame(rows).to_csv(dst, sep="\t", header=False, index=False)
-    log.info("%s: SignalP-6 -> %s (%d proteínas)", org, dst.name, len(rows))
-    shutil.rmtree(work, ignore_errors=True)
+# O proteoma core inteiro (~3900 seqs) estoura o tempo-limite da nuvem BioLib
+# ("Job exceeded max run time"). Loteamos e retomamos (cache por bloco). Lote de 500
+# equilibra: grande o bastante para amortizar o overhead de cold-start de cada job
+# BioLib (~10-15 min fixos), pequeno o bastante para caber no tempo-limite.
+BATCH = 500
+RETRIES = 3
 
 
-# ── DeepTMHMM (BioLib) -> gff3 (parse_tmhmm conta TMhelix) ───────────────────
-def run_tmhmm(org: str, fasta: Path):
+def _batches(fasta: Path, size: int):
+    from Bio import SeqIO
+    recs = list(SeqIO.parse(fasta, "fasta"))
+    for i in range(0, len(recs), size):
+        yield i // size, recs[i:i + size]
+
+
+def _run_biolib_batches(org, tool, fasta, uri, args_tmpl, out_name):
+    """Roda `uri` em lotes; devolve a lista de arquivos de saída (um por lote).
+    Cache por lote em results/03_surfaceome/_cache/{org}_{tool}/batch_XX.<ext>."""
     import biolib
-    work = Path(tempfile.mkdtemp())
-    shutil.copy(fasta, work / "in.faa")
-    prev = os.getcwd(); os.chdir(work)
-    try:
-        app = biolib.load("DTU/DeepTMHMM")
-        job = app.cli(args="--fasta in.faa")
-        job.get_stdout()
-        outdir = work / "tm"
-        job.save_files(str(outdir))
-        gff = next(outdir.rglob("*.gff3"))
-        shutil.copy(gff, out_tsv(org, "tmhmm"))
-    finally:
-        os.chdir(prev)
-    log.info("%s: DeepTMHMM -> %s", org, out_tsv(org, "tmhmm").name)
-    shutil.rmtree(work, ignore_errors=True)
+    from Bio import SeqIO
+    cache = out_tsv(org, "_x").parent / "_cache" / f"{org}_{tool}"
+    cache.mkdir(parents=True, exist_ok=True)
+    app = biolib.load(uri)
+    outputs = []
+    total = sum(1 for _ in _batches(fasta, BATCH))
+    for bi, chunk in _batches(fasta, BATCH):
+        cached = cache / f"batch_{bi:03d}_{out_name}"
+        if cached.exists() and cached.stat().st_size > 0:
+            outputs.append(cached); continue
+        # cabeçalho SÓ com o ID: o SignalP-6 nomeia arquivos de plot pelo header inteiro,
+        # e descrições longas de produto estouram o limite de 255 chars do FS ao baixar.
+        for r in chunk:
+            r.description = ""
+        last_err = None
+        for attempt in range(RETRIES):
+            work = Path(tempfile.mkdtemp())
+            SeqIO.write(chunk, work / "in.faa", "fasta")
+            prev = os.getcwd(); os.chdir(work)
+            try:
+                job = app.cli(args=args_tmpl)
+                job.get_stdout()
+                job.save_files(str(work / "out"))
+                produced = next((work / "out").rglob(out_name))
+                shutil.copy(produced, cached)
+                outputs.append(cached)
+                log.info("  %s/%s: lote %d/%d ok (%d seqs)", org, tool, bi + 1, total, len(chunk))
+                last_err = None
+                break
+            except Exception as exc:  # noqa: BLE001
+                last_err = exc
+                log.warning("  %s/%s: lote %d tentativa %d/%d falhou: %s",
+                            org, tool, bi + 1, attempt + 1, RETRIES, str(exc)[:150])
+            finally:
+                os.chdir(prev); shutil.rmtree(work, ignore_errors=True)
+        if last_err is not None:
+            raise last_err
+    return outputs
+
+
+# ── SignalP-6 (BioLib, loteado) -> tabular que parse_signalp espera ──────────
+def run_signalp(org: str, fasta: Path):
+    import pandas as pd
+    outs = _run_biolib_batches(
+        org, "signalp", fasta, "DTU/SignalP-6",
+        "--fastafile in.faa --organism other --format txt --output_dir output",
+        "prediction_results.txt")
+    rows = []
+    for pred in outs:
+        for line in pred.read_text().splitlines():
+            if line.startswith("#") or not line.strip():
+                continue
+            p = line.split("\t")
+            cs = p[-1] if "CS pos" in line else ""
+            rows.append([p[0].split()[0], p[1].strip(),
+                         p[2] if len(p) > 2 else "0", p[3] if len(p) > 3 else "0",
+                         p[4] if len(p) > 4 else "0", p[5] if len(p) > 5 else "0", cs])
+    pd.DataFrame(rows).to_csv(out_tsv(org, "signalp"), sep="\t", header=False, index=False)
+    log.info("%s: SignalP-6 -> %s (%d proteínas)", org, out_tsv(org, "signalp").name, len(rows))
+
+
+# ── DeepTMHMM (BioLib, loteado) -> gff3 concatenado ──────────────────────────
+def run_tmhmm(org: str, fasta: Path):
+    outs = _run_biolib_batches(org, "tmhmm", fasta, "DTU/DeepTMHMM",
+                               "--fasta in.faa", "TMRs.gff3")
+    dst = out_tsv(org, "tmhmm")
+    with open(dst, "w") as fh:
+        fh.write("##gff-version 3\n")
+        for gff in outs:
+            for line in gff.read_text().splitlines():
+                if not line.startswith("#") and line.strip():
+                    fh.write(line + "\n")
+    log.info("%s: DeepTMHMM -> %s (%d lotes)", org, dst.name, len(outs))
 
 
 def main():
@@ -129,6 +200,15 @@ def main():
     fasta = Path(args.fasta) if args.fasta else core_faa(args.organism)
     if not fasta.exists():
         raise SystemExit(f"FASTA ausente: {fasta}")
+    # idempotência: se a saída final já existe e tem conteúdo, não refaz (deeploc é caro)
+    name = {"deeploc": "psortb", "signalp": "signalp", "tmhmm": "tmhmm"}[args.tool]
+    done = out_tsv(args.organism, name)
+    if done.exists() and done.stat().st_size > 0:
+        log.info("%s/%s: %s já existe — pulando", args.organism, args.tool, done.name)
+        return
+    # deeploc roda no core inteiro (é local e barato); signalp/tmhmm só na superfície
+    if args.tool in ("signalp", "tmhmm") and args.fasta is None:
+        fasta = surface_subset(args.organism, fasta)
     {"deeploc": run_deeploc, "signalp": run_signalp, "tmhmm": run_tmhmm}[args.tool](args.organism, fasta)
 
 

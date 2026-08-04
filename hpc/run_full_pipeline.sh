@@ -24,7 +24,13 @@ stage "01b · download (idempotente — pula existentes)"
 run download python scripts/01b_download_proteomes.py --all
 
 stage "02 · core genome (BLAST vs referência)"
-for o in $ORGS; do run "core:$o" python scripts/02_core_genome_blast.py --organism $o --threads $T || exit 2; done
+for o in $ORGS; do
+  if [ -s "results/02_pangenome/${o}_core_proteins.faa" ]; then
+    log "✓ core:$o já existe — pulando"
+  else
+    run "core:$o" python scripts/02_core_genome_blast.py --organism $o --threads $T || exit 2
+  fi
+done
 
 stage "03 · surfaceome REAL (DeepLocPro + SignalP-6 + DeepTMHMM)"
 for o in $ORGS; do

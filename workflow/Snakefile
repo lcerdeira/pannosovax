@@ -1,4 +1,21 @@
 # PanNosoVax — orquestração do pipeline completo
+#
+# Este Snakefile descreve o pipeline que EFETIVAMENTE roda. A versão anterior
+# descrevia um caminho idealizado (bakta + panaroo + PSORTb + SignalP local) que
+# nunca chegou a ser executado: essas ferramentas exigem bancos de dezenas de GB ou
+# licença, e os resultados reais vieram de um caminho mais leve. Manter aquela
+# descrição quebraria a reprodutibilidade e a seção de Métodos do manuscrito.
+#
+# Decisões de método que este arquivo reflete:
+#   02  core genome por ortologia recíproca contra referência (BLASTp, O(N)) em vez
+#       de pangenoma all-vs-all. Limitação assumida no docstring do script: genes
+#       ausentes da referência não são descobertos.
+#   03  localização por DeepLocPro (procariótico, roda local); SignalP-6 e DeepTMHMM
+#       via BioLib rodam SÓ no subconjunto de superfície — a nuvem não aguenta o core
+#       inteiro, e a localização já descarta ~94% das proteínas.
+#   05  IEDB pelo runner próprio (o script canônico não bate com a API atual) e
+#       conservação por k-mer exato sobre homólogos achados por BLAST — não exige
+#       alinhamentos por gene, que este caminho não produz.
 configfile: "config/config.yaml"
 
 ORGANISMS = list(config["organisms"])
@@ -15,124 +32,120 @@ rule all:
         f"{OUT}/08_construct/construct.fasta",
         f"{OUT}/09_physchem/construct_properties.tsv",
         f"{OUT}/12_expression/expression_summary.tsv",
-        f"{OUT}/report/figures.done",
-        "manuscript/manuscript_filled.md"
+        f"{OUT}/report/figures.done"
 
 
 # ── 01 · aquisição ──────────────────────────────────────────────────────────────
 rule fetch_genomes:
-    output:
-        meta = f"{OUT}/01_genomes/{{org}}_selected.tsv"
+    output: f"{OUT}/01_genomes/{{org}}_selected.tsv"
     threads: 2
-    shell:
-        "python scripts/01_fetch_genomes.py --organism {wildcards.org}"
+    shell:  "python scripts/01_fetch_genomes.py --organism {wildcards.org}"
 
-
-# ── 02 · anotação + pangenoma ───────────────────────────────────────────────────
-rule annotate:
+rule download_proteomes:
+    """Baixa os proteomas (.faa) dos genomas selecionados. O nº vem do config
+    (organisms.<org>.n_genomes); idempotente — pula os já baixados."""
     input:  f"{OUT}/01_genomes/{{org}}_selected.tsv"
-    output: directory(f"{OUT}/02_pangenome/{{org}}_gff")
-    threads: config["threads"]
-    shell:
-        r"""
-        mkdir -p {output}
-        for fna in {OUT}/01_genomes/{wildcards.org}/ncbi_dataset/data/*/*.fna; do
-            acc=$(basename $(dirname $fna))
-            bakta --db data/external/bakta_db --output {output}/$acc \
-                  --prefix $acc --threads {threads} --force $fna
-            cp {output}/$acc/$acc.gff3 {output}/$acc.gff3
-        done
-        """
+    output: directory(f"{OUT}/01_genomes/{{org}}_proteomes")
+    shell:  "python scripts/01b_download_proteomes.py --organism {wildcards.org}"
 
-rule pangenome:
-    input:  f"{OUT}/02_pangenome/{{org}}_gff"
+
+# ── 02 · core genome ────────────────────────────────────────────────────────────
+rule core_genome:
+    input:  f"{OUT}/01_genomes/{{org}}_proteomes"
     output:
         core = f"{OUT}/02_pangenome/{{org}}_core_proteins.faa",
-        pres = f"{OUT}/02_pangenome/{{org}}_gene_presence_absence.csv",
-        aln  = directory(f"{OUT}/02_pangenome/{{org}}_gene_alignments")
+        pres = f"{OUT}/02_pangenome/{{org}}_presence.tsv"
     threads: config["threads"]
-    params:
-        thr  = config["pangenome"]["core_threshold"],
-        mode = config["pangenome"]["clean_mode"]
-    shell:
-        r"""
-        panaroo -i {input}/*.gff3 -o {OUT}/02_pangenome/{wildcards.org}_panaroo \
-                --clean-mode {params.mode} -a core --core_threshold {params.thr} \
-                -t {threads}
-        python scripts/02_extract_core.py --organism {wildcards.org}
-        """
+    shell:  "python scripts/02_core_genome_blast.py --organism {wildcards.org} --threads {threads}"
 
 
 # ── 03 · surfaceome ─────────────────────────────────────────────────────────────
 rule localization:
+    """DeepLocPro: localização subcelular procariótica, local, no core inteiro."""
     input:  f"{OUT}/02_pangenome/{{org}}_core_proteins.faa"
-    output:
+    output: f"{OUT}/03_surfaceome/{{org}}_psortb.tsv"
+    threads: config["threads"]
+    shell:  "python scripts/run_surfaceome_tools.py --organism {wildcards.org} --tool deeploc"
+
+rule signal_peptide:
+    """SignalP-6 (BioLib) — só no subconjunto de superfície (ver surface_subset())."""
+    input:  f"{OUT}/03_surfaceome/{{org}}_psortb.tsv"
+    output: f"{OUT}/03_surfaceome/{{org}}_signalp.tsv"
+    retries: 2
+    shell:  "python scripts/run_surfaceome_tools.py --organism {wildcards.org} --tool signalp"
+
+rule topology:
+    """DeepTMHMM (BioLib) — idem, só no subconjunto de superfície."""
+    input:  f"{OUT}/03_surfaceome/{{org}}_psortb.tsv"
+    output: f"{OUT}/03_surfaceome/{{org}}_tmhmm.tsv"
+    retries: 2
+    shell:  "python scripts/run_surfaceome_tools.py --organism {wildcards.org} --tool tmhmm"
+
+rule surfaceome:
+    """Aplica os limiares do config: localização permitida por tipo de parede,
+    peptídeo sinal, nº de hélices TM e faixa de tamanho."""
+    input:
         psortb  = f"{OUT}/03_surfaceome/{{org}}_psortb.tsv",
         signalp = f"{OUT}/03_surfaceome/{{org}}_signalp.tsv",
         tmhmm   = f"{OUT}/03_surfaceome/{{org}}_tmhmm.tsv"
-    threads: config["threads"]
-    params:
-        gram = lambda w: "-n" if w.org in ("kpsc", "abau") else "-p"
-    shell:
-        r"""
-        psortb {params.gram} -i {input} -o long   > {output.psortb}
-        signalp6 --fastafile {input} --organism other --format none \
-                 --output_dir {OUT}/03_surfaceome/{wildcards.org}_signalp6
-        cp {OUT}/03_surfaceome/{wildcards.org}_signalp6/prediction_results.txt {output.signalp}
-        python scripts/03b_deeptmhmm_client.py --fasta {input} --out {output.tmhmm}
-        """
-
-rule surfaceome:
-    input:
-        rules.localization.output
     output: f"{OUT}/03_surfaceome/{{org}}_candidates.tsv"
     shell:  "python scripts/03_surfaceome_filter.py --organism {wildcards.org}"
 
 
-# ── 04 · conservação, seleção, epitopos compartilhados ──────────────────────────
-rule selection:
-    input:
-        cand = f"{OUT}/03_surfaceome/{{org}}_candidates.tsv",
-        aln  = f"{OUT}/02_pangenome/{{org}}_gene_alignments"
-    output: f"{OUT}/04_selection/{{org}}_dnds.tsv"
-    threads: config["threads"]
-    shell:  "python scripts/04_conservation_dnds.py --organism {wildcards.org}"
-
-rule shared_epitopes:
-    input:  expand(f"{OUT}/04_selection/{{org}}_dnds.tsv", org=ORGANISMS)
-    output: f"{OUT}/04_shared/shared_structural_epitopes.tsv"
-    threads: config["threads"]
-    shell:  "python scripts/04b_structural_crossmatch.py"
-
-
-# ── 05-07 · epitopos, segurança, cobertura ──────────────────────────────────────
+# ── 05 · epitopos + conservação ─────────────────────────────────────────────────
 rule epitopes:
+    """IEDB (B, MHC-I, MHC-II) pelo runner próprio: cache por proteína (retomável)
+    e payload compatível com a API atual."""
+    input:  expand(f"{OUT}/03_surfaceome/{{org}}_candidates.tsv", org=ORGANISMS)
+    output: expand(OUT + "/05_epitopes/{org}_{klass}_raw.tsv", org=ORGANISMS, klass=CLASSES)
+    retries: 2
+    shell:  "python scripts/run_iedb_epitopes.py"
+
+rule homologs:
+    """Homólogos por BLASTp contra os proteomas de cada isolado — base da conservação."""
     input:
         cand = f"{OUT}/03_surfaceome/{{org}}_candidates.tsv",
-        sel  = f"{OUT}/04_selection/{{org}}_dnds.tsv"
-    output: f"{OUT}/05_epitopes/{{org}}_{{klass}}_conserved.tsv"
-    retries: 3
-    shell:  "python scripts/05_epitope_predict.py --organism {wildcards.org} --class {wildcards.klass}"
+        prot = f"{OUT}/01_genomes/{{org}}_proteomes"
+    output: f"{OUT}/02_pangenome/{{org}}_homologs.json"
+    threads: config["threads"]
+    shell:  "python scripts/build_homologs_blast.py --organisms {wildcards.org} --threads {threads}"
 
+rule conservation:
+    """Conservação = fração dos isolados cujo homólogo contém o k-mer exato do epitopo."""
+    input:
+        raw = expand(OUT + "/05_epitopes/{org}_{klass}_raw.tsv", org=ORGANISMS, klass=CLASSES),
+        hom = expand(f"{OUT}/02_pangenome/{{org}}_homologs.json", org=ORGANISMS)
+    output: expand(OUT + "/05_epitopes/{org}_{klass}_conserved.tsv", org=ORGANISMS, klass=CLASSES)
+    shell:  "python scripts/apply_conservation.py"
+
+
+# ── 06-07 · segurança e cobertura ───────────────────────────────────────────────
 rule safety:
+    """Quatro camadas: self humano, mimetismo 7-mer, microbioma comensal e
+    alergenicidade/toxicidade — esta última fica PENDENTE até submissão manual
+    (AllerTOP/ToxinPred); ver docs/PROTOCOL.md §2A. Pendente não é aprovação."""
     input:  f"{OUT}/05_epitopes/{{org}}_{{klass}}_conserved.tsv"
     output: f"{OUT}/06_safety/{{org}}_{{klass}}_safe.tsv"
     threads: config["threads"]
     shell:  "python scripts/06_safety_screen.py --organism {wildcards.org} --class {wildcards.klass}"
 
 rule coverage:
+    """Cobertura máxima gulosa (garantia 1-1/e) ponderada por HLA mundial + brasileiro."""
     input:  expand(f"{OUT}/06_safety/{{org}}_{{{{klass}}}}_safe.tsv", org=ORGANISMS)
     output: f"{OUT}/07_coverage/selected_{{klass}}.tsv"
-    shell:  "python scripts/07_population_coverage.py --class {wildcards.klass}"
+    wildcard_constraints:
+        klass = "mhc1|mhc2"
+    shell:  "python scripts/07_population_coverage.py --class {wildcards.klass} --n 18 --brazil-weight 0.5"
 
 
-# ── 08-09 · construto ───────────────────────────────────────────────────────────
+# ── 08-12 · construto e caracterização ──────────────────────────────────────────
 rule construct:
     input:
         mhc  = expand(f"{OUT}/07_coverage/selected_{{k}}.tsv", k=["mhc1", "mhc2"]),
-        bcel = expand(f"{OUT}/06_safety/{{org}}_bcell_safe.tsv", org=ORGANISMS),
-        shar = f"{OUT}/04_shared/shared_structural_epitopes.tsv"
-    output: f"{OUT}/08_construct/construct.fasta"
+        bcel = expand(f"{OUT}/06_safety/{{org}}_bcell_safe.tsv", org=ORGANISMS)
+    output:
+        fasta = f"{OUT}/08_construct/construct.fasta",
+        cmap  = f"{OUT}/08_construct/construct_map.tsv"
     shell:  "python scripts/08_construct_builder.py"
 
 rule physchem:
@@ -140,33 +153,6 @@ rule physchem:
     output: f"{OUT}/09_physchem/construct_properties.tsv"
     shell:  "python scripts/09_physchem.py --fasta {input}"
 
-
-# ── 10-11 · estrutura, docking, MD, imunossimulação ─────────────────────────────
-rule structure:
-    input:  f"{OUT}/08_construct/construct.fasta"
-    output: f"{OUT}/10_structure/construct_refined.pdb"
-    threads: config["threads"]
-    shell:  "python scripts/10_structure.py --fasta {input} --out {output}"
-
-rule docking:
-    input:  f"{OUT}/10_structure/construct_refined.pdb"
-    output: f"{OUT}/10_docking/docking_scores.tsv"
-    threads: config["threads"]
-    shell:  "python scripts/10b_docking.py --pdb {input}"
-
-rule md:
-    input:  f"{OUT}/10_docking/docking_scores.tsv"
-    output: f"{OUT}/11_md/md_summary.tsv"
-    threads: config["threads"]
-    shell:  "bash scripts/11_md_gromacs.sh {threads}"
-
-rule immunosim:
-    input:  f"{OUT}/08_construct/construct.fasta"
-    output: f"{OUT}/11_immunosim/immune_response.tsv"
-    shell:  "python scripts/11b_immune_sim.py --fasta {input}"
-
-
-# ── 12 · expressão ──────────────────────────────────────────────────────────────
 rule expression:
     input:  f"{OUT}/08_construct/construct.fasta"
     output: f"{OUT}/12_expression/expression_summary.tsv"
@@ -176,16 +162,36 @@ rule expression:
 # ── relatório ───────────────────────────────────────────────────────────────────
 rule report:
     input:
+        f"{OUT}/08_construct/construct_map.tsv",
         f"{OUT}/09_physchem/construct_properties.tsv",
-        f"{OUT}/12_expression/expression_summary.tsv",
-        f"{OUT}/11_immunosim/immune_response.tsv",
-        f"{OUT}/11_md/md_summary.tsv",
         expand(f"{OUT}/07_coverage/selected_{{k}}.tsv", k=["mhc1", "mhc2"])
-    output:
-        touch(f"{OUT}/report/figures.done")
-    shell:  "python scripts/report/make_figures.py"
+    output: touch(f"{OUT}/report/figures.done")
+    shell:  "python scripts/report/paper_figures.py"
 
-rule fill_manuscript:
-    input:  f"{OUT}/report/figures.done"
-    output: "manuscript/manuscript_filled.md"
-    shell:  "python scripts/report/fill_manuscript.py"
+
+# ── etapas com dependência externa (fora do caminho padrão) ─────────────────────
+# Rodam sob demanda: exigem ferramenta pesada, GPU ou submissão manual pelo navegador.
+# Não entram em `rule all` para que o pipeline padrão termine sem intervenção humana.
+#
+#   estrutura 3D     scripts/10_structure.py                  ColabFold / Colab
+#   docking          scripts/10b_docking.py                   HADDOCK
+#   dinâmica (MD)    scripts/11_md_gromacs.sh                 GROMACS
+#   imunossimulação  scripts/11b_immune_sim.py                C-ImmSim (web, manual)
+#   dN/dS            scripts/04_conservation_dnds.py          HyPhy + CDS nucleotídicos
+#   crossmatch       scripts/04b_structural_crossmatch_v2.py  TMalign + AlphaFold DB
+rule structure:
+    input:  f"{OUT}/08_construct/construct.fasta"
+    output: f"{OUT}/10_structure/construct_refined.pdb"
+    threads: config["threads"]
+    shell:  "python scripts/10_structure.py --fasta {input} --out {output}"
+
+rule immunosim:
+    input:  f"{OUT}/08_construct/construct.fasta"
+    output: f"{OUT}/11_immunosim/immune_response.tsv"
+    shell:  "python scripts/11b_immune_sim.py --fasta {input}"
+
+rule md:
+    input:  f"{OUT}/10_structure/construct_refined.pdb"
+    output: f"{OUT}/11_md/md_summary.tsv"
+    threads: config["threads"]
+    shell:  "bash scripts/11_md_gromacs.sh {threads}"
