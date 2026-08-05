@@ -87,7 +87,9 @@ def stage_counts(cfg) -> dict[str, int]:
     counts: dict[str, int] = {}
     for org in cfg["organisms"]:
         for key, sub, fname in [
-            (f"core_{org}", "02_pangenome", f"{org}_gene_presence_absence.csv"),
+            # presence.tsv é a saída real do core genome (02_core_genome_blast.py);
+            # gene_presence_absence.csv era do panaroo, que nunca rodou neste pipeline.
+            (f"core_{org}", "02_pangenome", f"{org}_presence.tsv"),
             (f"cand_{org}", "03_surfaceome", f"{org}_candidates.tsv"),
             (f"sel_{org}", "04_selection", f"{org}_dnds.tsv"),
         ]:
@@ -140,11 +142,98 @@ def resolve_secao_resultados(cfg) -> str | None:
     return "\n".join(lines) if len(lines) > 2 else None
 
 
+def resolve_n_core_total(cfg) -> str | None:
+    """Total de proteínas core somando os organismos (coluna is_core do presence.tsv)."""
+    total = 0
+    for org in cfg["organisms"]:
+        p = outpath(cfg, "02_pangenome", f"{org}_presence.tsv")
+        if not p.exists():
+            return None
+        try:
+            total += int(pd.read_csv(p, sep="\t")["is_core"].fillna(False).astype(bool).sum())
+        except Exception:
+            return None
+    return f"{total:,}".replace(",", ",") if total else None
+
+
+def resolve_n_surface_total(cfg) -> str | None:
+    """Proteínas em compartimento acessível a anticorpo, somando os organismos.
+
+    Lê a saída do preditor de localização (DeepLocPro, gravada no formato PSORTb),
+    aplicando as localizações permitidas por tipo de parede declaradas no config.
+    """
+    import re
+    surf_ok = {"kpsc": set(cfg["surfaceome"]["gram_negative_ok"]),
+               "abau": set(cfg["surfaceome"]["gram_negative_ok"]),
+               "spneu": set(cfg["surfaceome"]["gram_positive_ok"])}
+    total = 0
+    for org in cfg["organisms"]:
+        p = outpath(cfg, "03_surfaceome", f"{org}_psortb.tsv")
+        if not p.exists():
+            return None
+        hits = re.findall(r"SeqID: (\S+)\n  Final Prediction:\n  (\S+) ([\d.]+)", p.read_text())
+        total += sum(1 for _, loc, _ in hits if loc in surf_ok.get(org, set()))
+    return str(total) if total else None
+
+
+def resolve_cobertura_resumo(cfg) -> str | None:
+    """Cobertura fenotípica mundo/Brasil do conjunto selecionado, por classe."""
+    parts = []
+    for klass, label in (("mhc1", "MHC-I"), ("mhc2", "MHC-II")):
+        p = outpath(cfg, "07_coverage", f"selected_{klass}.tsv")
+        if not p.exists():
+            continue
+        try:
+            d = pd.read_csv(p, sep="\t")
+        except Exception:
+            continue
+        if not len(d):
+            continue
+        w = 100 * d["set_coverage_world"].max()
+        b = 100 * d["set_coverage_brazil"].max()
+        parts.append(f"{label}: {len(d)} epitopos, cobertura de {w:.1f}% (mundo) "
+                     f"e {b:.1f}% (Brasil)")
+    return "; ".join(parts) + "." if parts else None
+
+
+def resolve_construto_resumo(cfg) -> str | None:
+    """Tamanho, composição e propriedades do construto final."""
+    import json
+    parts = []
+    blocks = outpath(cfg, "08_construct", "construct_blocks.json")
+    if blocks.exists():
+        try:
+            b = json.loads(blocks.read_text())
+            n = b.get("n_epitopes")
+            bl = b.get("blocks", {})
+            if n:
+                parts.append(f"O construto final reúne {n} epitopos "
+                             f"({len(bl.get('bcell', []))} de célula B, "
+                             f"{len(bl.get('mhc2', []))} MHC-II, "
+                             f"{len(bl.get('mhc1', []))} MHC-I)")
+        except Exception:
+            pass
+    prop = outpath(cfg, "09_physchem", "construct_properties.tsv")
+    if prop.exists():
+        try:
+            r = pd.read_csv(prop, sep="\t").iloc[0]
+            parts.append(f"totalizando {int(r['length'])} aa e {r['molecular_weight_kda']:.1f} kDa, "
+                         f"com pI {r['theoretical_pi']:.2f}, índice de instabilidade "
+                         f"{r['instability_index']:.1f} e {int(r['n_cysteine'])} cisteínas livres")
+        except Exception:
+            pass
+    return ", ".join(parts) + "." if parts else None
+
+
 RESOLVERS = {
     "n_genomes_total": resolve_n_genomes_total,
     "md_ns": resolve_md_ns,
     "results_summary": resolve_results_summary,
     "secao_resultados": resolve_secao_resultados,
+    "n_core_total": resolve_n_core_total,
+    "n_surface_total": resolve_n_surface_total,
+    "cobertura_resumo": resolve_cobertura_resumo,
+    "construto_resumo": resolve_construto_resumo,
 }
 
 
