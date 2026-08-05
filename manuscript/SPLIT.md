@@ -49,8 +49,12 @@ exclusivo do Paper B. Nenhuma figura é compartilhada.
 ## Estado
 - [x] Estrutura de pastas criada
 - [x] Esqueletos dos dois papers (outline + seções)
-- [ ] Tradução PT→EN do Paper A
-- [ ] Reescrever Métodos removendo qualquer enquadramento de "ferramenta"
-- [ ] Preencher números a partir dos TSVs (via scripts/report/fill_manuscript.py)
-- [ ] Paper B: escrever quando o app estiver empacotado
-- [ ] Checklists de submissão de cada revista
+- [x] **Paper A escrito em inglês** (`npj-vaccines/manuscript_en.md`, ~2000 palavras)
+- [x] Métodos reescritos descrevendo o pipeline real (sem enquadramento de "ferramenta")
+- [x] **Bibliografia via CrossRef** (21 entradas, `scripts/report/build_bibliography.py`);
+      3 entradas sinalizadas para conferência humana
+- [x] **Paper B escrito** (`bioinformatics-appnote/manuscript_en.md`, 931 palavras de corpo)
+- [ ] Preencher números do Paper A (automático, quando o re-run terminar)
+- [ ] Paper A: autoria/afiliações, Reporting Summary do portfólio Nature
+- [ ] Paper B: release com binários, DOI Zenodo, Figura 1, demo end-to-end
+- [ ] Verificar as 3 referências sinalizadas (snakemake, RS09, DeepTMHMM preprint)
