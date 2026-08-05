@@ -105,9 +105,14 @@ first-class pipeline stages rather than post-hoc scripts: negative screening aga
 commensal microbiome, and epitope selection by maximum population coverage weighted by
 non-European HLA allele frequencies.
 
-**Figure 1.** (a) The stage view during execution, showing per-stage state and streaming log.
-(b) The workflow dependency graph rendered by Snakemake, illustrating that the graphical layer
-drives — and does not replace — the reproducible workflow.
+**Figure 1.** PanNosoVax Studio. (**a**) The execution view. Each stage carries a state badge
+derived from the workflow itself by a dry run — *completed* stages are skipped on the next
+run, so an interrupted analysis resumes rather than restarts. Stage descriptions state the
+expected cost up front, including that epitope prediction takes hours. (**b**) The rule graph
+of the underlying Snakemake workflow, coloured by pipeline phase: acquisition (grey), core
+genome (blue), surfaceome (green), epitope prediction and conservation (orange), safety
+screening (red), coverage optimisation (purple), construct and characterisation (dark blue).
+The interface in (a) drives the graph in (b); it does not reimplement it.
 
 ## 4 Conclusion
 
@@ -133,6 +138,6 @@ remove them.
 | Packaged binaries downloadable | ⬜ built by CI; need a tagged release |
 | Archived DOI (Zenodo) | ⬜ |
 | End-to-end demo through all default stages | ⬜ pending full-scale run settling |
-| Figure 1 (interface + DAG) | ⬜ |
+| Figure 1 (interface + DAG) | ✅ |
 | Author list, contact, funding | ⬜ |
 | Paper A citation (for cross-reference) | ⬜ depends on Paper A status |
