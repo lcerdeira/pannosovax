@@ -16,7 +16,7 @@ Uso:
     python scripts/run_iedb_epitopes.py --organisms spneu
 """
 from __future__ import annotations
-import argparse, io, sys, time
+import argparse, io, json, sys, time
 from pathlib import Path
 
 import pandas as pd
@@ -111,6 +111,37 @@ def alignments_dir(org):
     return d if d.exists() else None
 
 
+def load_homologs(org):
+    """Carrega o mapa de homólogos para calcular conservação.
+
+    Duas fontes, em ordem de preferência:
+      1. {org}_homologs.json — produzido por build_homologs_blast.py (método BLAST,
+         validado no piloto; não exige MAFFT/panaroo). Formato:
+         {protein_id: {"n_genomes": N, "homologs": [seqs]}}
+      2. {org}_gene_alignments/*.fasta — alinhamentos MAFFT, se existirem.
+
+    Devolve (homologs_por_proteina, denominador_por_proteina) ou (None, None).
+    O denominador é o nº de genomas (isolado sem ortólogo conta contra a conservação),
+    coerente com "presente em X% dos isolados".
+    """
+    js = ROOT / f"results/02_pangenome/{org}_homologs.json"
+    if js.exists():
+        data = json.loads(js.read_text())
+        homologs = {pid: rec.get("homologs", []) for pid, rec in data.items()}
+        denom = {pid: rec.get("n_genomes") or len(rec.get("homologs", []))
+                 for pid, rec in data.items()}
+        log.info("%s: conservação via BLAST homologs.json (%d proteínas)", org, len(homologs))
+        return homologs, denom
+    adir = alignments_dir(org)
+    if adir:
+        homologs = {fa.stem: [str(r.seq).replace("-", "") for r in SeqIO.parse(fa, "fasta")]
+                    for fa in adir.glob("*.fasta")}
+        denom = {pid: len(seqs) for pid, seqs in homologs.items()}
+        log.info("%s: conservação via alinhamentos MAFFT (%d genes)", org, len(homologs))
+        return homologs, denom
+    return None, None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--classes", nargs="+", default=["mhc2", "mhc1", "bcell"],
@@ -160,23 +191,21 @@ def main():
                     log.info("%s/%s: %d/%d proteínas (%.1fs/prot, ~%.0fmin restam)",
                              org, klass, i, len(seqs), rate, rate * (len(seqs) - i) / 60)
             out = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-            # conservação: só se houver alinhamentos
-            adir = alignments_dir(org)
-            if adir and len(out):
-                homologs = {}
-                for fa in adir.glob("*.fasta"):
-                    homologs[fa.stem] = [str(r.seq).replace("-", "") for r in SeqIO.parse(fa, "fasta")]
+            # conservação: BLAST homologs.json (preferido) ou alinhamentos MAFFT
+            homologs, denom = load_homologs(org)
+            if homologs and len(out):
                 out["conservation"] = [
-                    (sum(1 for h in homologs.get(pid, []) if pep in h) / len(homologs[pid]))
-                    if homologs.get(pid) else float("nan")
+                    (sum(1 for h in homologs.get(pid, []) if pep in h) / denom[pid])
+                    if homologs.get(pid) and denom.get(pid) else float("nan")
                     for pep, pid in zip(out["peptide"], out["protein_id"])
                 ]
             else:
                 if len(out):
                     out["conservation"] = float("nan")
-                if not adir:
-                    log.warning("%s: sem alinhamentos por gene — conservação NaN "
-                                "(filtro de conservação e etapa 07 ficam PENDENTES)", org)
+                if not homologs:
+                    log.warning("%s: sem homologs.json nem alinhamentos — conservação NaN. "
+                                "Rode scripts/build_homologs_blast.py --organism %s antes "
+                                "da etapa 07.", org, org)
             if len(out):
                 out["organism"] = org; out["epitope_class"] = klass
             write_table(out, ROOT / f"results/05_epitopes/{org}_{klass}_raw.tsv", log)

@@ -139,6 +139,12 @@ construct:
     mhc2: GPGPG
     bcell: KK
   his_tag: true
+  # His C-terminal desligado: a cauda pET-28a já provê His6 na N-terminal. Um segundo
+  # tag é redundante para purificação e adiciona carga catiônica desnecessária.
+  his_tag_cterm: false
+  # remove epitopos que compartilham k-mer >=8 entre si (dupla contagem do mesmo
+  # determinante, ex.: KIAPVAAYK vs LSKIAPVAAY). shared > mhc1 > mhc2 > bcell na disputa.
+  dedup_kmer: 8
   # Cisteína livre ímpar -> dissulfeto aberrante em E. coli. Exclui epitopos com Cys
   # da seleção (07) e do bloco B (08) para um construto sem cisteína livre.
   exclude_free_cysteine: true

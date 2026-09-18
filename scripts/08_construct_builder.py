@@ -93,7 +93,8 @@ def assemble(blocks: dict[str, list[str]], cfg_c: dict) -> tuple[str, list[dict]
 
     if parts and parts[-1][0] == "linker":
         parts.pop()
-    if cfg_c.get("his_tag"):
+    # His6 C-terminal só se explicitamente pedido — a cauda pET-28a já traz His6 no N.
+    if cfg_c.get("his_tag") and cfg_c.get("his_tag_cterm", False):
         parts.append(("linker", "GPGPG", linkers["mhc2"]))
         parts.append(("tag", "His6-C", "HHHHHH"))
 
@@ -129,9 +130,34 @@ def load_blocks(cfg: dict) -> dict[str, list[str]]:
 
     p = outpath(cfg, "04_shared", "shared_structural_epitopes.tsv")
     if p.exists():
-        blocks["shared"] = pd.read_csv(p, sep="\t")["peptide"].tolist()
+        sd = pd.read_csv(p, sep="\t")
+        blocks["shared"] = sd["peptide"].tolist() if "peptide" in sd and len(sd) else []
 
+    k = cfg.get("construct", {}).get("dedup_kmer")
+    if k:
+        blocks = _dedup_across_blocks(blocks, int(k))
     return blocks
+
+
+def _dedup_across_blocks(blocks: dict[str, list[str]], k: int) -> dict[str, list[str]]:
+    """Remove epitopos que compartilham um k-mer com outro já mantido (dupla contagem).
+
+    Ordem de prioridade: shared > mhc1 > mhc2 > bcell — o bloco compartilhado é a tese
+    e nunca é descartado por colisão; os demais cedem para ele.
+    """
+    seen: set[str] = set()
+    out: dict[str, list[str]] = {}
+    for block in ("shared", "mhc1", "mhc2", "bcell"):
+        kept = []
+        for ep in blocks.get(block, []):
+            km = {ep[i:i + k] for i in range(len(ep) - k + 1)} or {ep}
+            if km & seen:
+                log.info("dedup: removido %s de '%s' (k-mer compartilhado)", ep, block)
+                continue
+            kept.append(ep)
+            seen |= km
+        out[block] = kept
+    return out
 
 
 DEMO_BLOCKS = {
@@ -166,7 +192,7 @@ def main() -> None:
     tag = "demo_" if args.demo else ""
     fasta = outpath(cfg, "08_construct", f"{tag}construct.fasta")
     with open(fasta, "w") as fh:
-        fh.write(f">PanNosoVax_v1 len={len(seq)} n_epitopes={total}\n")
+        fh.write(f">PanNosoVax_v2 len={len(seq)} n_epitopes={total}\n")
         for i in range(0, len(seq), 60):
             fh.write(seq[i:i + 60] + "\n")
 
@@ -179,7 +205,7 @@ def main() -> None:
              len(seq), total, len(mapping))
     log.info("adjuvante: %s (%s)", cfg["construct"]["adjuvant"],
              ADJUVANTS[cfg["construct"]["adjuvant"]][1])
-    print(f"\n>PanNosoVax_v1 ({len(seq)} aa)")
+    print(f"\n>PanNosoVax_v2 ({len(seq)} aa)")
     for i in range(0, len(seq), 60):
         print(seq[i:i + 60])
 

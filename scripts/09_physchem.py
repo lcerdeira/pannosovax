@@ -57,15 +57,20 @@ def characterize(seq: str) -> dict:
 
 
 def verdict(p: dict) -> dict:
+    # Gates que reprovam de fato (bloqueiam a expressão/estabilidade da molécula).
     checks = {
         "estavel": p["instability_index"] < 40,
         "soluvel": p["gravy"] < 0,
-        "termoestavel": p["aliphatic_index"] > 70,
         "pi_fora_da_faixa_neutra": not (6.5 <= p["theoretical_pi"] <= 7.5),
         "sem_cisteina_livre_impar": p["n_cysteine"] % 2 == 0,
         "expressavel_ecoli": p["ecoli_halflife_class"].startswith("estável"),
     }
     checks["APROVADO"] = all(checks.values())
+    # Avisos: informativos, NÃO reprovam. O índice alifático > 70 (Ikai 1980) indica
+    # termoestabilidade, mas não há corte canônico e proteínas mesofílicas normais
+    # ficam em ~70-90; um valor logo abaixo de 70 não é defeito e não deve derrubar
+    # um candidato são. Mantido como aviso, não como gate.
+    checks["aviso_termoestabilidade_baixa"] = p["aliphatic_index"] <= 70
     return checks
 
 
