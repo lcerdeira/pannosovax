@@ -140,8 +140,8 @@ remove them.
 | CI passing on macOS + Windows | ✅ |
 | Automated tests | ✅ API contract tests |
 | Demonstration dataset | ✅ 9 genomes, minutes |
-| Packaged binaries downloadable | ⬜ built by CI; need a tagged release |
-| Archived DOI (Zenodo) | ⬜ |
+| Packaged binaries downloadable | 🟡 CI publishes a Release with .zip assets on a v* tag; needs the tag |
+| Archived DOI (Zenodo) | ⬜ enable Zenodo-GitHub for the repo, then tag |
 | End-to-end demo through all default stages | ⬜ pending full-scale run settling |
 | Figure 1 (interface + DAG) | ✅ |
 | Author list, contact, funding | 🟡 authors and contact done; funding pending |

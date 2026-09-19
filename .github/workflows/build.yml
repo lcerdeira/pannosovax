@@ -62,3 +62,33 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: dist/*
+
+  release:
+    # Publica um GitHub Release com os binários anexados.
+    # Sem este job, a tag só gera artefatos de CI: exigem login para baixar, expiram
+    # em 90 dias e — o que bloqueia o Application Note — o Zenodo arquiva Releases,
+    # não artefatos, então não sairia DOI.
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write          # necessário para criar o Release
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Compactar um .zip por plataforma
+        # O --windowed do PyInstaller produz um bundle .app no macOS; zipar preserva
+        # a estrutura do bundle, que um upload de arquivos soltos quebraria.
+        run: |
+          cd artifacts
+          for d in */; do (cd "$d" && zip -qr "../${d%/}.zip" .); done
+          ls -lh *.zip
+      - name: Criar o Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          gh release create "${{ github.ref_name }}" artifacts/*.zip
+          --repo "${{ github.repository }}"
+          --title "PanNosoVax Studio ${{ github.ref_name }}"
+          --generate-notes
