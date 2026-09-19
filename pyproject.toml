@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pannosovax-studio"
-version = "0.1.0"
+version = "0.1.1"
 description = "Desktop/browser app for reproducible multi-epitope vaccine design without the command line"
 readme = "README.md"
 requires-python = ">=3.10"

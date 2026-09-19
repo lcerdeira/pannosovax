@@ -19,8 +19,8 @@ authors:
     # orcid: "https://orcid.org/0000-0000-0000-0000"   # PREENCHER
 license: GPL-3.0-or-later
 repository-code: "https://github.com/lcerdeira/pannosovax"
-version: "0.1.0"
-date-released: "2026-09-18"
+version: "0.1.1"
+date-released: "2026-09-19"
 keywords:
   - vacinologia reversa
   - multi-epitopo

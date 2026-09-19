@@ -70,7 +70,31 @@ Manuscrito em [manuscript/manuscript.md](manuscript/manuscript.md); versão Word
 pandoc manuscript/_submission.md -o manuscript/PanNosoVax_manuscrito.docx
 ```
 
-## Como rodar
+## Instalar o PanNosoVax Studio
+
+O aplicativo desktop é a via recomendada: traz a interface gráfica sobre o mesmo
+workflow Snakemake, sem linha de comando.
+
+**Binários prontos (macOS e Windows).** Baixe o `.zip` da sua plataforma na página de
+[releases](https://github.com/lcerdeira/pannosovax/releases), descompacte e execute
+`PanNosoVax Studio`. Nenhuma dependência precisa ser instalada à parte.
+
+**A partir do código** (qualquer plataforma, Python ≥ 3.10):
+
+```bash
+git clone https://github.com/lcerdeira/pannosovax.git
+cd pannosovax
+pip install -e .
+pannosovax-studio
+```
+
+**Verificar a instalação** com o conjunto de demonstração (9 genomas, poucos minutos):
+
+```bash
+bash demo/run_demo.sh
+```
+
+## Como rodar o pipeline direto
 
 ```bash
 mamba env create -f environment.yml
