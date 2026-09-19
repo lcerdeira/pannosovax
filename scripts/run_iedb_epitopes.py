@@ -5,10 +5,9 @@ Roda MHC-I, MHC-II e B-cell linear para os 3 organismos, com checkpoint por
 proteína (retomável). Escreve na disposição que o pipeline espera:
     results/05_epitopes/{org}_{klass}_raw.tsv
 
-Conservação (k-mer exato em >=95% dos isolados) SÓ é aplicada se existirem os
-alinhamentos por gene em results/02_pangenome/{org}_gene_alignments/. Se ausentes,
-a coluna `conservation` fica NaN e NÃO se descarta nada silenciosamente — o filtro
-de conservação (e a etapa 07) fica pendente até os alinhamentos serem gerados.
+Conservação NÃO é calculada aqui: a coluna `conservation` sai NaN por desenho. Quem
+a preenche é o estágio 05c (build_homologs_blast.py -> apply_conservation.py), que lê
+estes _raw.tsv e escreve os _conserved.tsv. Ver NaN aqui é o esperado, não um erro.
 
 Uso:
     python scripts/run_iedb_epitopes.py                 # tudo
@@ -16,7 +15,7 @@ Uso:
     python scripts/run_iedb_epitopes.py --organisms spneu
 """
 from __future__ import annotations
-import argparse, io, json, sys, time
+import argparse, io, sys, time
 from pathlib import Path
 
 import pandas as pd
@@ -106,42 +105,6 @@ def load_seqs(org):
     return {r.id: str(r.seq) for r in SeqIO.parse(faa, "fasta") if r.id in keep}
 
 
-def alignments_dir(org):
-    d = ROOT / f"results/02_pangenome/{org}_gene_alignments"
-    return d if d.exists() else None
-
-
-def load_homologs(org):
-    """Carrega o mapa de homólogos para calcular conservação.
-
-    Duas fontes, em ordem de preferência:
-      1. {org}_homologs.json — produzido por build_homologs_blast.py (método BLAST,
-         validado no piloto; não exige MAFFT/panaroo). Formato:
-         {protein_id: {"n_genomes": N, "homologs": [seqs]}}
-      2. {org}_gene_alignments/*.fasta — alinhamentos MAFFT, se existirem.
-
-    Devolve (homologs_por_proteina, denominador_por_proteina) ou (None, None).
-    O denominador é o nº de genomas (isolado sem ortólogo conta contra a conservação),
-    coerente com "presente em X% dos isolados".
-    """
-    js = ROOT / f"results/02_pangenome/{org}_homologs.json"
-    if js.exists():
-        data = json.loads(js.read_text())
-        homologs = {pid: rec.get("homologs", []) for pid, rec in data.items()}
-        denom = {pid: rec.get("n_genomes") or len(rec.get("homologs", []))
-                 for pid, rec in data.items()}
-        log.info("%s: conservação via BLAST homologs.json (%d proteínas)", org, len(homologs))
-        return homologs, denom
-    adir = alignments_dir(org)
-    if adir:
-        homologs = {fa.stem: [str(r.seq).replace("-", "") for r in SeqIO.parse(fa, "fasta")]
-                    for fa in adir.glob("*.fasta")}
-        denom = {pid: len(seqs) for pid, seqs in homologs.items()}
-        log.info("%s: conservação via alinhamentos MAFFT (%d genes)", org, len(homologs))
-        return homologs, denom
-    return None, None
-
-
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--classes", nargs="+", default=["mhc2", "mhc1", "bcell"],
@@ -191,22 +154,13 @@ def main():
                     log.info("%s/%s: %d/%d proteínas (%.1fs/prot, ~%.0fmin restam)",
                              org, klass, i, len(seqs), rate, rate * (len(seqs) - i) / 60)
             out = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-            # conservação: BLAST homologs.json (preferido) ou alinhamentos MAFFT
-            homologs, denom = load_homologs(org)
-            if homologs and len(out):
-                out["conservation"] = [
-                    (sum(1 for h in homologs.get(pid, []) if pep in h) / denom[pid])
-                    if homologs.get(pid) and denom.get(pid) else float("nan")
-                    for pep, pid in zip(out["peptide"], out["protein_id"])
-                ]
-            else:
-                if len(out):
-                    out["conservation"] = float("nan")
-                if not homologs:
-                    log.warning("%s: sem homologs.json nem alinhamentos — conservação NaN. "
-                                "Rode scripts/build_homologs_blast.py --organism %s antes "
-                                "da etapa 07.", org, org)
+            # Conservação NÃO é calculada aqui, de propósito. A fonte única da verdade é
+            # o estágio 05c (build_homologs_blast.py -> apply_conservation.py), que lê
+            # estes _raw.tsv e escreve os _conserved.tsv. Duplicar o cálculo aqui já
+            # criou duas implementações do mesmo número, que podem divergir no
+            # denominador. Sair daqui com conservation vazia é o comportamento correto.
             if len(out):
+                out["conservation"] = float("nan")
                 out["organism"] = org; out["epitope_class"] = klass
             write_table(out, ROOT / f"results/05_epitopes/{org}_{klass}_raw.tsv", log)
             log.info("%s/%s: %d epitopos brutos gravados", org, klass, len(out))
