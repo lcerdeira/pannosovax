@@ -63,12 +63,20 @@ fi
 
 # 7. Actions precisa estar destravado; conta bloqueada por cobrança não roda job
 #    nenhum, e a tag passa sem gerar Release.
+#    Tem de ser o workflow 'build' especificamente: outros workflows rodam em
+#    ubuntu (grátis e não bloqueado) e passam, mascarando o bloqueio que atinge
+#    os runners macOS/Windows de que o build depende.
 if command -v gh >/dev/null 2>&1; then
-  if gh run list --limit 1 --json conclusion -q '.[0].conclusion' 2>/dev/null | grep -q failure; then
-    printf '  \033[33mAVISO\033[0m a última execução do CI falhou. Se for '
-    printf '"account is locked due to a billing issue", resolva antes: a tag não gera Release.\n'
+  last=$(gh run list --workflow build.yml --limit 1 \
+           --json conclusion -q '.[0].conclusion' 2>/dev/null || echo "")
+  if [[ "$last" == "failure" ]]; then
+    bad "a última execução do workflow 'build' falhou — a tag não geraria Release"
+    printf '        se for "account is locked due to a billing issue", resolva em\n'
+    printf '        github.com/settings/billing antes de marcar a tag\n'
+  elif [[ -z "$last" ]]; then
+    printf '  \033[33mAVISO\033[0m não consegui ler o estado do workflow build\n'
   else
-    ok "última execução do CI não está em falha"
+    ok "workflow 'build' com última execução em '$last'"
   fi
 fi
 
