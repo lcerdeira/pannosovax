@@ -1,5 +1,10 @@
 # A pan-nosocomial multi-epitope immunogen against three WHO-priority respiratory pathogens, designed with commensal-microbiome safety screening and Brazil-weighted HLA coverage
 
+**Louise Cerdeira**^1^ and **Sarah Scalercio**^2^
+
+^1^ London School of Hygiene & Tropical Medicine (LSHTM), London, UK  
+^2^ Instituto de Ciência e Tecnologia em Biomodelos (ICTB), Fiocruz, Rio de Janeiro, Brazil
+
 **Target journal:** npj Vaccines (Article)
 
 > **Note on numbers.** Every quantity below is a PENDING marker filled from the pipeline's

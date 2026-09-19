@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "Se você usar este software, por favor cite-o como abaixo."
+title: "PanNosoVax Studio"
+abstract: >-
+  Pipeline reprodutível e aplicativo desktop para desenho in silico de imunógenos
+  multi-epitopo pan-patógeno, independentes de sorotipo, contra Klebsiella pneumoniae
+  species complex, Acinetobacter baumannii e Streptococcus pneumoniae, com otimização
+  de cobertura HLA ponderada por populações sub-representadas.
+type: software
+authors:
+  - given-names: Louise
+    family-names: Cerdeira
+    affiliation: "London School of Hygiene & Tropical Medicine (LSHTM)"
+    email: louise.cerdeira@gmail.com
+    # orcid: "https://orcid.org/0000-0000-0000-0000"   # PREENCHER
+  - given-names: Sarah
+    family-names: Scalercio
+    affiliation: "Instituto de Ciência e Tecnologia em Biomodelos (ICTB), Fiocruz"
+    # orcid: "https://orcid.org/0000-0000-0000-0000"   # PREENCHER
+license: GPL-3.0-or-later
+repository-code: "https://github.com/lcerdeira/pannosovax"
+version: "0.1.0"
+date-released: "2026-09-18"
+keywords:
+  - vacinologia reversa
+  - multi-epitopo
+  - resistência antimicrobiana
+  - imunoinformática
+  - cobertura populacional HLA
+  - Klebsiella pneumoniae
+  - Acinetobacter baumannii
+  - Streptococcus pneumoniae

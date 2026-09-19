@@ -1,5 +1,10 @@
 # PanNosoVax Studio: reproducible multi-epitope vaccine design without the command line
 
+**Louise Cerdeira**^1^ and **Sarah Scalercio**^2^
+
+^1^ London School of Hygiene & Tropical Medicine (LSHTM), London, UK  
+^2^ Instituto de Ciência e Tecnologia em Biomodelos (ICTB), Fiocruz, Rio de Janeiro, Brazil
+
 **Target journal:** Bioinformatics (OUP) — Applications Note
 **Length budget:** ~1300–2000 words, one figure, ≤20 references
 
@@ -25,7 +30,7 @@ are available at <https://github.com/lcerdeira/pannosovax> under GPL-3.0. Packag
 macOS and Windows are produced by continuous integration. Implemented in Python 3.11
 (FastAPI, Snakemake, Biopython).
 
-**Contact.** ⟨author contact⟩
+**Contact.** Louise Cerdeira (louise.cerdeira@gmail.com).
 
 ---
 
@@ -139,5 +144,5 @@ remove them.
 | Archived DOI (Zenodo) | ⬜ |
 | End-to-end demo through all default stages | ⬜ pending full-scale run settling |
 | Figure 1 (interface + DAG) | ✅ |
-| Author list, contact, funding | ⬜ |
+| Author list, contact, funding | 🟡 authors and contact done; funding pending |
 | Paper A citation (for cross-reference) | ⬜ depends on Paper A status |

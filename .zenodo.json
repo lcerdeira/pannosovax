@@ -1,0 +1,27 @@
+{
+  "title": "PanNosoVax Studio: pipeline e aplicativo para desenho in silico de vacinas multi-epitopo pan-patógeno",
+  "description": "Pipeline reprodutível e aplicativo desktop (GUI sobre Snakemake) para desenho in silico de imunógenos multi-epitopo pan-patógeno, independentes de sorotipo, contra Klebsiella pneumoniae species complex, Acinetobacter baumannii e Streptococcus pneumoniae, com triagem de segurança de quatro camadas (proteoma humano, mimetismo autoimune, microbioma comensal, alergenicidade/toxicidade) e otimização de cobertura HLA ponderada por populações sub-representadas.",
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "GPL-3.0-or-later",
+  "creators": [
+    {
+      "name": "Cerdeira, Louise",
+      "affiliation": "London School of Hygiene & Tropical Medicine (LSHTM)"
+    },
+    {
+      "name": "Scalercio, Sarah",
+      "affiliation": "Instituto de Ciência e Tecnologia em Biomodelos (ICTB), Fiocruz"
+    }
+  ],
+  "keywords": [
+    "vacinologia reversa",
+    "multi-epitopo",
+    "resistência antimicrobiana",
+    "imunoinformática",
+    "cobertura populacional HLA",
+    "Klebsiella pneumoniae",
+    "Acinetobacter baumannii",
+    "Streptococcus pneumoniae"
+  ]
+}
