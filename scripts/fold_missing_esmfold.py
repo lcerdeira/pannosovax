@@ -40,6 +40,35 @@ RETRIES = 3
 PAUSE = 1.0          # cortesia com a API pública entre submissões
 
 
+def normalize_plddt(pdb: str) -> str:
+    """Reescreve o B-factor de 0–1 para 0–100, a escala do AlphaFold DB.
+
+    A API do ESMAtlas devolve pLDDT normalizado entre 0 e 1, enquanto os modelos do
+    AlphaFold DB usam 0 a 100. Como o 04b mistura as duas origens num mesmo corte de
+    confiança, gravar cada uma na sua escala faz o corte rejeitar todo modelo do
+    ESMFold sem dizer nada. Gravamos já convertido para que o arquivo em disco tenha
+    uma escala só, independente de quem o leia.
+    """
+    out, bvals = [], []
+    for line in pdb.splitlines(keepends=True):
+        if line.startswith(("ATOM", "HETATM")):
+            try:
+                bvals.append(float(line[60:66]))
+            except ValueError:
+                pass
+    if not bvals or max(bvals) > 1.0:
+        return pdb                      # já está em 0–100
+    for line in pdb.splitlines(keepends=True):
+        if line.startswith(("ATOM", "HETATM")):
+            try:
+                b = float(line[60:66]) * 100.0
+                line = f"{line[:60]}{b:6.2f}{line[66:]}"
+            except ValueError:
+                pass
+        out.append(line)
+    return "".join(out)
+
+
 def fold(seq: str) -> str | None:
     for attempt in range(RETRIES):
         try:
@@ -83,7 +112,7 @@ def main() -> int:
                 fail += 1
                 log.error("  %s: sem estrutura", pid)
                 continue
-            (odir / f"{pid}.pdb").write_text(pdb)
+            (odir / f"{pid}.pdb").write_text(normalize_plddt(pdb))
             ok += 1
             if i % 10 == 0 or i == len(todo):
                 log.info("  %s: %d/%d dobradas", org, i, len(todo))

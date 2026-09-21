@@ -39,7 +39,15 @@ AA3 = {"ALA":"A","ARG":"R","ASN":"N","ASP":"D","CYS":"C","GLN":"Q","GLU":"E","GL
 
 
 def ca_plddt(pdb: Path) -> list[float]:
-    """pLDDT (B-factor do CA) por resíduo, na ordem da cadeia."""
+    """pLDDT (B-factor do CA) por resíduo, na ordem da cadeia, sempre em 0–100.
+
+    O AlphaFold DB grava pLDDT de 0 a 100; o ESMFold, pela API do ESMAtlas, grava de
+    0 a 1. Sem normalizar, o corte `--min-plddt 70` rejeita TODO modelo do ESMFold —
+    silenciosamente, porque um modelo descartado é indistinguível de um que não existe.
+    Foi o que aconteceu: 57 estruturas adicionadas para cobrir A. baumannii não
+    entraram em nenhuma comparação, e a conclusão de que a assimetria entre os pares
+    era biológica repousava sobre elas.
+    """
     vals = []
     with open(pdb) as fh:
         for line in fh:
@@ -48,6 +56,8 @@ def ca_plddt(pdb: Path) -> list[float]:
                     vals.append(float(line[60:66]))
                 except ValueError:
                     vals.append(0.0)
+    if vals and max(vals) <= 1.0:
+        vals = [v * 100.0 for v in vals]
     return vals
 
 
