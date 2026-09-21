@@ -62,11 +62,15 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--n", type=int, default=5, help="quantos epitopos compartilhados")
     ap.add_argument("--min-len", type=int, default=13)
+    ap.add_argument("--source", default="shared_validated_v2.tsv",
+                    help="tabela de regiões validadas (04b2); use shared_validated_3way.tsv "
+                         "para o bloco exigido nos três patógenos")
+    ap.add_argument("--out", default="shared_structural_epitopes.tsv")
     ap.add_argument("--config", default=None)
     args = ap.parse_args()
 
     cfg = load_config(args.config)
-    src = outpath(cfg, "04_shared", "shared_validated_v2.tsv")
+    src = outpath(cfg, "04_shared", args.source)
     if not src.exists():
         raise SystemExit(f"faltando {src} — rode o estágio 04 (sobreposição estrutural)")
 
@@ -120,7 +124,7 @@ def main() -> None:
             break
 
     out = pd.DataFrame(rows)
-    write_table(out, outpath(cfg, "04_shared", "shared_structural_epitopes.tsv"), log)
+    write_table(out, outpath(cfg, "04_shared", args.out), log)
     log.info("bloco compartilhado: %d epitopos selecionados", len(out))
     for _, r in out.iterrows():
         log.info("   %-16s  %s%s  (%d seguros na regiao)",
