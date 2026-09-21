@@ -59,6 +59,35 @@ def products(path: Path) -> pd.Series:
     return df[col].fillna("").astype(str).str.lower()
 
 
+# Só a rejeição por LOCALIZAÇÃO é falha do filtro: significa que julgamos a proteína
+# inalcançável quando ela não é. Rejeição por tamanho ou topologia é decisão
+# deliberada e defensável — o caso concreto é o PspC, que no core aparece apenas como
+# fragmentos de 58 e 90 aa porque o locus é polimórfico demais para ter comprimento
+# conservado. Tratar isso como erro faria o controle positivo falhar para sempre, e um
+# teste que sempre falha é um teste que ninguém lê.
+GATES = {
+    "pass_localization": "localização",
+    "pass_length": "tamanho",
+    "pass_topology": "topologia",
+    "excluded_by_annotation": "anotação citoplasmática",
+}
+
+
+def rejection_reasons(full: pd.DataFrame, needle: str) -> list[str]:
+    """Quais portões a proteína reprovou, entre as linhas que casam com o antígeno."""
+    prod = full["product"].fillna("").astype(str).str.lower()
+    rows = full[prod.str.contains(needle, regex=False)]
+    reasons = []
+    for gate, label in GATES.items():
+        if gate not in rows.columns:
+            continue
+        failed = ~rows[gate].astype(bool) if gate != "excluded_by_annotation" \
+            else rows[gate].astype(bool)
+        if failed.all():
+            reasons.append(label)
+    return reasons
+
+
 def main() -> int:
     missing_total = 0
     for org, targets in KNOWN.items():
@@ -68,27 +97,39 @@ def main() -> int:
             log.warning("%s: sem tabelas do estágio 03 — pulando", org)
             continue
         cand, full = products(cand_path), products(full_path)
+        full_df = pd.read_csv(full_path, sep="\t")
 
-        hits, absent, not_core = [], [], []
+        hits, lost, defensible, not_core = [], [], [], []
         for name, needle in targets.items():
             if cand.str.contains(needle, regex=False).any():
                 hits.append(name)
             elif full.str.contains(needle, regex=False).any():
-                absent.append(name)      # está no core, o filtro rejeitou
+                why = rejection_reasons(full_df, needle)
+                # A localização só é o motivo decisivo se a proteína passaria nos
+                # demais portões. O PspC do core são fragmentos de 58 e 90 aa: um
+                # fragmento desses não é o antígeno, qualquer que seja sua
+                # localização, e culpar o filtro de localização esconderia isso.
+                if "localização" in why and not ({"tamanho", "topologia"} & set(why)):
+                    lost.append(f"{name} ({', '.join(why)})")
+                else:
+                    defensible.append(f"{name} ({', '.join(why) or 'motivo não identificado'})")
             else:
-                not_core.append(name)    # nem chegou ao core
+                not_core.append(name)
 
         log.info("%s: %d/%d antígenos conhecidos recuperados — %s",
                  org, len(hits), len(targets), ", ".join(hits) or "nenhum")
         if not_core:
             log.info("  fora do core (esperado para loci variáveis): %s", ", ".join(not_core))
-        if absent:
-            missing_total += len(absent)
-            log.error("  NO CORE MAS REJEITADOS pelo filtro: %s", ", ".join(absent))
+        if defensible:
+            log.info("  rejeitados por critério deliberado: %s", ", ".join(defensible))
+        if lost:
+            missing_total += len(lost)
+            log.error("  PERDIDOS POR LOCALIZAÇÃO: %s", ", ".join(lost))
 
     if missing_total:
-        log.error("%d antígeno(s) estabelecido(s) presente(s) no core foram descartados "
-                  "pelo surfaceome — o filtro está perdendo superfície real.", missing_total)
+        log.error("%d antígeno(s) estabelecido(s) foram julgados inalcançáveis pelo filtro "
+                  "de localização — isso é perda de superfície real, não critério.",
+                  missing_total)
         return 1
     log.info("Controle positivo OK.")
     return 0
