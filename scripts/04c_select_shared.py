@@ -6,21 +6,28 @@ Este é o bloco que materializa a tese central do PanNosoVax: epitopos que caem 
 regiões estruturalmente equivalentes (TM-score alto) entre patógenos distintos,
 identificados no estágio 04 por sobreposição estrutural, não por identidade de sequência.
 
-O critério é compartilhamento por PAR de patógenos, não pelos três. Exigir os três
-produzia apenas 2 regiões e 3 epitopos, todos já representados nos blocos B/MHC — bloco
-vazio. O gargalo é A. baumannii x S. pneumoniae (4 janelas), e ele não é artefato de
-cobertura: dobrar as estruturas de A. baumannii (30 -> 76) não mudou o resultado.
-Compartilhamento por par rende 314 regiões em 61 proteínas.
+O bloco é montado em DOIS NÍVEIS, porque as evidências de compartilhamento não têm o
+mesmo peso e uma alegação uniforme cairia na revisão — basta um epitopo do nível mais
+fraco para desmentir a afirmação geral:
 
-O construto v1 foi montado antes deste bloco existir e por isso o ignorou. Aqui
-selecionamos de `shared_validated_v2.tsv` os melhores representantes, com dois filtros:
+  1. `tres_patogenos` — região equivalente nos três. É a alegação mais forte; rende
+     poucos epitopos (2), insuficientes para um bloco sozinha;
+  2. `par_cruza_gram` — região equivalente entre um Gram-negativo e o pneumococo, que
+     não compartilham nem arquitetura de parede nem ancestral próximo.
+
+O par K. pneumoniae x A. baumannii fica FORA: são duas Gammaproteobacteria e respondem
+por 2423 das 2682 janelas, então incluí-lo encheria o bloco com o resultado esperado.
+
+O mecanismo por trás do nível 2 é a dobra do transportador ABC de ligação a substrato:
+151 das 182 janelas kpsc x spneu e 57 das 77 abau x spneu são ABC-SB x ABC-SB (ver
+`04e_analyze_asymmetry.py`). Já kpsc x abau conversa por porina, classe ausente no
+Gram-positivo.
+
+Sobre cada candidato aplicamos ainda dois filtros:
 
   1. sem colisão de k-mer (>=8) com os epitopos já presentes nos blocos B/MHC-I/MHC-II
      — evita contar o mesmo determinante duas vezes e inflar o construto;
-  2. sem redundância interna entre os próprios shared.
-
-A prioridade é para regiões que cruzam a fronteira Gram (ver `crosses_gram`), depois
-por profundidade da região e por proteína distinta.
+  2. sem redundância interna entre os próprios shared, e uma proteína-âncora por vaga.
 
 Saída: results/04_shared/shared_structural_epitopes.tsv  (lido pelo estágio 08)
 """
@@ -63,35 +70,53 @@ def main() -> None:
     ap.add_argument("--n", type=int, default=5, help="quantos epitopos compartilhados")
     ap.add_argument("--min-len", type=int, default=13)
     ap.add_argument("--source", default="shared_validated_v2.tsv",
-                    help="tabela de regiões validadas (04b2); use shared_validated_3way.tsv "
-                         "para o bloco exigido nos três patógenos")
+                    help="regiões compartilhadas por PAR de patógenos (04b2)")
+    ap.add_argument("--source-3way", default="shared_validated_3way.tsv",
+                    help="regiões compartilhadas pelos TRÊS; entram primeiro no bloco")
     ap.add_argument("--out", default="shared_structural_epitopes.tsv")
     ap.add_argument("--config", default=None)
     args = ap.parse_args()
 
     cfg = load_config(args.config)
-    src = outpath(cfg, "04_shared", args.source)
-    if not src.exists():
-        raise SystemExit(f"faltando {src} — rode o estágio 04 (sobreposição estrutural)")
 
-    d = pd.read_csv(src, sep="\t")
-
-    # Prioridade: regiões que atravessam a fronteira Gram-negativo/Gram-positivo.
-    #
-    # Sobreposição estrutural entre K. pneumoniae e A. baumannii é esperada — são duas
-    # Gammaproteobacteria, e é de onde vem a maior parte das 314 regiões. O que sustenta
-    # a tese é a equivalência entre um Gram-negativo e o pneumococo, que compartilham
-    # nem parede celular nem ancestral próximo: 76 regiões, contra 235 do par fácil.
-    # Ordenar por profundidade da região apenas encheria o bloco com o par trivial.
     def crosses_gram(row) -> bool:
         orgs = {row["organism"], *str(row["partner_orgs"]).split("|")}
         return len({GRAM[o] for o in orgs if o in GRAM}) > 1
 
-    d["cruza_gram"] = d.apply(crosses_gram, axis=1)
-    d = d.sort_values(["cruza_gram", "n_epitopos_seguros_na_regiao"],
-                      ascending=[False, False])
-    log.info("%d regiões candidatas, %d delas cruzando a fronteira Gram",
-             len(d), int(d["cruza_gram"].sum()))
+    # ── bloco em dois níveis ──────────────────────────────────────────────────
+    #
+    # Nem toda evidência de compartilhamento tem o mesmo peso, e alegar um grau único
+    # para o bloco inteiro não sobrevive à revisão: basta um epitopo do nível mais
+    # fraco para desmentir a afirmação geral. Então declaramos o nível de cada um.
+    #
+    #   1. três patógenos — a alegação mais forte, e existe: 33 regiões, 9 validadas.
+    #      Sozinha rende apenas 2 epitopos, poucos para um bloco;
+    #   2. par cruzando a fronteira Gram — equivalência entre um Gram-negativo e o
+    #      pneumococo, que não compartilham parede celular nem ancestral próximo.
+    #
+    # O par K. pneumoniae x A. baumannii não entra: são duas Gammaproteobacteria e
+    # respondem por 2423 das 2682 janelas. Encheria o bloco com o resultado esperado.
+    frames = []
+    for fname, tier in [(args.source_3way, "tres_patogenos"),
+                        (args.source, "par_cruza_gram")]:
+        p = outpath(cfg, "04_shared", fname)
+        if not p.exists():
+            log.warning("%s ausente — nível '%s' fica de fora", fname, tier)
+            continue
+        f = pd.read_csv(p, sep="\t")
+        if f.empty:
+            continue
+        f["cruza_gram"] = f.apply(crosses_gram, axis=1)
+        if tier == "par_cruza_gram":
+            f = f[f["cruza_gram"]]
+        f["nivel"] = tier
+        frames.append(f.sort_values("n_epitopos_seguros_na_regiao", ascending=False))
+    if not frames:
+        raise SystemExit("faltam as tabelas do 04b2 — rode o estágio 04")
+
+    d = pd.concat(frames, ignore_index=True)
+    for tier, g in d.groupby("nivel", sort=False):
+        log.info("nível '%s': %d regiões candidatas", tier, len(g))
 
     # pool de k-mers dos blocos já existentes (evita dupla contagem do mesmo determinante)
     pool = set()
@@ -99,6 +124,9 @@ def main() -> None:
         pool |= kmers(e)
     log.info("pool de %d k-mers dos blocos B/MHC existentes", len(pool))
 
+    # A ordem do laço já garante a precedência do nível 1: como `d` vem concatenado com
+    # os três patógenos primeiro, um epitopo de par nunca ocupa a vaga de um deles nem
+    # bloqueia sua proteína por colisão.
     picked, seen_prot, rows = [], set(), []
     for _, r in d.iterrows():
         # Preferimos o maior peptídeo seguro da região: o representante mediano
@@ -119,6 +147,7 @@ def main() -> None:
                      "anchor_protein": r["protein"],
                      "n_safe_in_region": int(r["n_epitopos_seguros_na_regiao"]),
                      "cruza_gram": bool(r["cruza_gram"]),
+                     "nivel": r["nivel"],
                      "note": "regiao estruturalmente compartilhada (TM>=0.5)"})
         if len(picked) >= args.n:
             break
@@ -126,11 +155,12 @@ def main() -> None:
     out = pd.DataFrame(rows)
     write_table(out, outpath(cfg, "04_shared", args.out), log)
     log.info("bloco compartilhado: %d epitopos selecionados", len(out))
-    for _, r in out.iterrows():
-        log.info("   %-16s  %s%s  (%d seguros na regiao)",
-                 r["peptide"], r["organisms"],
-                 "  [cruza Gram]" if r["cruza_gram"] else "",
-                 r["n_safe_in_region"])
+    if len(out):
+        for nivel, g in out.groupby("nivel", sort=False):
+            log.info("  nível '%s': %d", nivel, len(g))
+        for _, r in out.iterrows():
+            log.info("   %-16s  %-22s  %-15s  (%d seguros na regiao)",
+                     r["peptide"], r["organisms"], r["nivel"], r["n_safe_in_region"])
 
 
 if __name__ == "__main__":
