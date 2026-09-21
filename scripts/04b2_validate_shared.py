@@ -63,6 +63,11 @@ def main() -> int:
         inside = sorted((p for p in safe.get(r.organism, ()) if p in region), key=len)
         if not inside:
             continue
+        # Registramos o MAIOR peptídeo seguro da região, além do mediano. O bloco
+        # compartilhado exige um comprimento mínimo, e um representante mediano
+        # descarta a região inteira quando a mediana é um 9-mer de MHC-I — mesmo
+        # havendo peptídeo longo ali dentro. Isso custou caro: das 79 regiões que
+        # cruzam a fronteira Gram, só 3 sobreviviam ao corte de tamanho.
         rows.append({
             "organism": r.organism,
             "protein": r.protein,
@@ -70,6 +75,7 @@ def main() -> int:
             "partner_orgs": r.partner_orgs,
             "n_epitopos_seguros_na_regiao": len(inside),
             "exemplo_epitopo": inside[len(inside) // 2],
+            "maior_epitopo": inside[-1],
         })
 
     out = pd.DataFrame(rows).sort_values("n_epitopos_seguros_na_regiao", ascending=False)

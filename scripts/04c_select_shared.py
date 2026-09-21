@@ -97,7 +97,9 @@ def main() -> None:
 
     picked, seen_prot, rows = [], set(), []
     for _, r in d.iterrows():
-        ep = str(r["exemplo_epitopo"])
+        # Preferimos o maior peptídeo seguro da região: o representante mediano
+        # reprovava no corte de tamanho regiões que continham peptídeo longo.
+        ep = str(r.get("maior_epitopo") or r["exemplo_epitopo"])
         if len(ep) < args.min_len:
             continue
         if r["protein"] in seen_prot:
