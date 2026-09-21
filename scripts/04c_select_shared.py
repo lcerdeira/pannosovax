@@ -3,8 +3,14 @@
 Estágio 04c — seleção do bloco de epitopos ESTRUTURALMENTE COMPARTILHADOS.
 
 Este é o bloco que materializa a tese central do PanNosoVax: epitopos que caem em
-regiões estruturalmente equivalentes (TM-score alto) nas proteínas dos três patógenos,
-identificados no estágio 04 (sobreposição estrutural, não identidade de sequência).
+regiões estruturalmente equivalentes (TM-score alto) entre patógenos distintos,
+identificados no estágio 04 por sobreposição estrutural, não por identidade de sequência.
+
+O critério é compartilhamento por PAR de patógenos, não pelos três. Exigir os três
+produzia apenas 2 regiões e 3 epitopos, todos já representados nos blocos B/MHC — bloco
+vazio. O gargalo é A. baumannii x S. pneumoniae (4 janelas), e ele não é artefato de
+cobertura: dobrar as estruturas de A. baumannii (30 -> 76) não mudou o resultado.
+Compartilhamento por par rende 314 regiões em 61 proteínas.
 
 O construto v1 foi montado antes deste bloco existir e por isso o ignorou. Aqui
 selecionamos de `shared_validated_v2.tsv` os melhores representantes, com dois filtros:
@@ -13,8 +19,8 @@ selecionamos de `shared_validated_v2.tsv` os melhores representantes, com dois f
      — evita contar o mesmo determinante duas vezes e inflar o construto;
   2. sem redundância interna entre os próprios shared.
 
-Prioriza regiões com maior número de epitopos seguros (mais "profundas") e proteínas
-distintas, para maximizar a diversidade estrutural do bloco.
+A prioridade é para regiões que cruzam a fronteira Gram (ver `crosses_gram`), depois
+por profundidade da região e por proteína distinta.
 
 Saída: results/04_shared/shared_structural_epitopes.tsv  (lido pelo estágio 08)
 """
@@ -24,7 +30,7 @@ import argparse
 
 import pandas as pd
 
-from common import get_logger, load_config, outpath, write_table
+from common import GRAM, get_logger, load_config, outpath, write_table
 
 log = get_logger("04c_shared")
 
@@ -64,8 +70,24 @@ def main() -> None:
     if not src.exists():
         raise SystemExit(f"faltando {src} — rode o estágio 04 (sobreposição estrutural)")
 
-    d = pd.read_csv(src, sep="\t").sort_values(
-        "n_epitopos_seguros_na_regiao", ascending=False)
+    d = pd.read_csv(src, sep="\t")
+
+    # Prioridade: regiões que atravessam a fronteira Gram-negativo/Gram-positivo.
+    #
+    # Sobreposição estrutural entre K. pneumoniae e A. baumannii é esperada — são duas
+    # Gammaproteobacteria, e é de onde vem a maior parte das 314 regiões. O que sustenta
+    # a tese é a equivalência entre um Gram-negativo e o pneumococo, que compartilham
+    # nem parede celular nem ancestral próximo: 76 regiões, contra 235 do par fácil.
+    # Ordenar por profundidade da região apenas encheria o bloco com o par trivial.
+    def crosses_gram(row) -> bool:
+        orgs = {row["organism"], *str(row["partner_orgs"]).split("|")}
+        return len({GRAM[o] for o in orgs if o in GRAM}) > 1
+
+    d["cruza_gram"] = d.apply(crosses_gram, axis=1)
+    d = d.sort_values(["cruza_gram", "n_epitopos_seguros_na_regiao"],
+                      ascending=[False, False])
+    log.info("%d regiões candidatas, %d delas cruzando a fronteira Gram",
+             len(d), int(d["cruza_gram"].sum()))
 
     # pool de k-mers dos blocos já existentes (evita dupla contagem do mesmo determinante)
     pool = set()
@@ -90,6 +112,7 @@ def main() -> None:
                      "organisms": f"{r['organism']}+{r['partner_orgs']}",
                      "anchor_protein": r["protein"],
                      "n_safe_in_region": int(r["n_epitopos_seguros_na_regiao"]),
+                     "cruza_gram": bool(r["cruza_gram"]),
                      "note": "regiao estruturalmente compartilhada (TM>=0.5)"})
         if len(picked) >= args.n:
             break
@@ -98,8 +121,10 @@ def main() -> None:
     write_table(out, outpath(cfg, "04_shared", "shared_structural_epitopes.tsv"), log)
     log.info("bloco compartilhado: %d epitopos selecionados", len(out))
     for _, r in out.iterrows():
-        log.info("   %-16s  %s  (%d seguros na regiao)",
-                 r["peptide"], r["organisms"], r["n_safe_in_region"])
+        log.info("   %-16s  %s%s  (%d seguros na regiao)",
+                 r["peptide"], r["organisms"],
+                 "  [cruza Gram]" if r["cruza_gram"] else "",
+                 r["n_safe_in_region"])
 
 
 if __name__ == "__main__":
