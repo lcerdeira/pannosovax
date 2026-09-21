@@ -85,6 +85,36 @@ def functional_score(product: str, keywords: list[str]) -> int:
     return sum(1 for kw in keywords if kw.lower() in product)
 
 
+def excluded_by_annotation(product: str, keywords: list[str]) -> bool:
+    """Proteína que a anotação identifica como citoplasmática abundante.
+
+    O DeepLocPro rotulou 12 proteínas ribossomais do pneumococo como
+    "Extracellular" — 67% das candidatas daquele organismo. São falsos-positivos
+    conhecidos: ribossomos, chaperonas e fatores de alongamento são abundantes e
+    confundem preditores treinados em composição de aminoácidos. Nenhuma é
+    alcançável por anticorpo, e cada uma ocupa uma vaga na seleção por cobertura.
+    """
+    product = (product or "").lower()
+    return any(kw.lower() in product for kw in keywords)
+
+
+LPXTG = re.compile(r"LP.TG")
+
+
+def surface_anchored_gram_positive(seq: str, signalp_pred: str) -> bool:
+    """Evidência de ancoragem exposta na superfície de um Gram-positivo.
+
+    Duas formas reconhecidas: lipobox (SignalP-6 chama LIPO — via Sec/SPII, que
+    ancora a proteína no folheto EXTERNO da membrana, como PsaA) e motivo LPXTG
+    reconhecido por sortase, que liga covalentemente à parede (como PspC). Sem
+    membrana externa para encobri-las, ambas ficam acessíveis ao anticorpo.
+    """
+    if str(signalp_pred).upper() == "LIPO":
+        return True
+    # o motivo de sortase fica no extremo C-terminal, antes da cauda hidrofóbica
+    return bool(LPXTG.search(str(seq)[-60:]))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--organism", required=True, choices=["kpsc", "abau", "spneu"])
@@ -121,9 +151,29 @@ def main() -> None:
     df["n_tm_helices"] = df.get("n_tm_helices", pd.Series(0, index=df.index)).fillna(0)
     allowed = sf["gram_negative_ok"] if GRAM[org] == "negative" else sf["gram_positive_ok"]
 
-    df["pass_localization"] = df.get("localization", "").isin(allowed) & (
-        df.get("psortb_score", 0) >= sf["psortb_min_score"]
+    score_ok = df.get("psortb_score", 0) >= sf["psortb_min_score"]
+    df["pass_localization"] = df.get("localization", "").isin(allowed) & score_ok
+
+    # Gram-positivo: recuperar as ancoradas à superfície que o preditor mandou para
+    # a membrana citoplasmática. Em Gram-negativo esse rótulo significa membrana
+    # interna e continua sendo motivo de exclusão.
+    df["anchored_surface"] = False
+    if GRAM[org] == "positive" and sf.get("gram_positive_membrane_if_anchored"):
+        at_membrane = df.get("localization", "").eq(sf["gram_positive_membrane_loc"]) & score_ok
+        df["anchored_surface"] = at_membrane & df.apply(
+            lambda r: surface_anchored_gram_positive(
+                seqs[r["protein_id"]].seq, r.get("prediction", "")), axis=1)
+        df["pass_localization"] = df["pass_localization"] | df["anchored_surface"]
+        log.info("%s: %d proteínas de membrana recuperadas por ancoragem de superfície "
+                 "(lipobox ou LPXTG)", org, int(df["anchored_surface"].sum()))
+
+    df["excluded_by_annotation"] = df["product"].map(
+        lambda p: excluded_by_annotation(p, sf.get("exclude_annotation_keywords", []))
     )
+    n_excl = int((df["excluded_by_annotation"] & df["pass_localization"]).sum())
+    if n_excl:
+        log.info("%s: %d proteínas descartadas por anotação citoplasmática apesar da "
+                 "localização predita", org, n_excl)
     df["pass_topology"] = df["n_tm_helices"] <= sf["max_tm_helices"]
     df["pass_length"] = df["length"].between(sf["min_length"], sf["max_length"])
     df["pass_export"] = df.get("has_signal", False).fillna(False) | df["pass_localization"]
@@ -132,7 +182,8 @@ def main() -> None:
     )
 
     df["candidate"] = (df["pass_localization"] & df["pass_topology"]
-                       & df["pass_length"] & df["pass_export"])
+                       & df["pass_length"] & df["pass_export"]
+                       & ~df["excluded_by_annotation"])
     df = df.sort_values(["candidate", "functional_score", "psortb_score"],
                         ascending=False)
 

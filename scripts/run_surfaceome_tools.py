@@ -38,9 +38,14 @@ def core_faa(org: str) -> Path:
 
 
 # Localizações que contam como "acessível a anticorpo" por tipo de parede.
+# Em Gram-positivo a membrana citoplasmática ENTRA no subconjunto: sem membrana
+# externa, as lipoproteínas ancoradas no folheto externo ficam expostas. É
+# justamente o SignalP-6 que separa as expostas (LIPO) das internas, então elas
+# precisam ser submetidas para que o estágio 03 possa decidir. Em Gram-negativo o
+# mesmo compartimento é a membrana interna, inalcançável — fica de fora.
 SURFACE_LOC = {"kpsc": {"OuterMembrane", "Extracellular"},
                "abau": {"OuterMembrane", "Extracellular"},
-               "spneu": {"Cellwall", "Extracellular"}}
+               "spneu": {"Cellwall", "Extracellular", "CytoplasmicMembrane"}}
 
 
 def surface_subset(org: str, fasta: Path) -> Path:

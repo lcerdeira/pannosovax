@@ -48,6 +48,30 @@ surfaceome:
   # Localizações aceitas por tipo de parede celular
   gram_negative_ok: [OuterMembrane, Extracellular]
   gram_positive_ok: [Cellwall, Extracellular]
+  # Gram-positivo não tem membrana externa: lipoproteínas ancoradas no folheto
+  # externo da membrana citoplasmática ficam EXPOSTAS na superfície, e são alvos
+  # clássicos (PsaA). O preditor as rotula CytoplasmicMembrane, que em Gram-negativo
+  # significa membrana interna (inacessível) — a mesma etiqueta com significados
+  # opostos. Admitimos essas proteínas quando há evidência de ancoragem de
+  # superfície: lipobox (SignalP LIPO) ou motivo LPXTG de sortase.
+  gram_positive_membrane_if_anchored: true
+  gram_positive_membrane_loc: CytoplasmicMembrane
+  # Preditores de localização dão falso-positivo "Extracellular" em proteínas
+  # abundantes do citoplasma (ribossomais em primeiro lugar). Elas não são alvo de
+  # anticorpo e ainda competem por vaga na seleção por cobertura.
+  exclude_annotation_keywords:
+    - ribosomal protein
+    - elongation factor
+    - chaperonin
+    - chaperone
+    - GroEL
+    - GroES
+    - DnaK
+    - trigger factor
+    - RNA polymerase
+    - DNA polymerase
+    - tRNA ligase
+    - tRNA synthetase
   psortb_min_score: 7.5
   max_tm_helices: 1           # >1 hélice TM = difícil de expressar/solubilizar
   min_length: 100
