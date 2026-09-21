@@ -129,9 +129,20 @@ def load_blocks(cfg: dict) -> dict[str, list[str]]:
     blocks["bcell"] = bcell
 
     p = outpath(cfg, "04_shared", "shared_structural_epitopes.tsv")
+    blocks["shared"] = []
     if p.exists():
-        sd = pd.read_csv(p, sep="\t")
-        blocks["shared"] = sd["peptide"].tolist() if "peptide" in sd and len(sd) else []
+        # Um bloco compartilhado vazio é um resultado possível — significa que nenhuma
+        # região estruturalmente comum sobreviveu à triagem — e não pode derrubar a
+        # montagem do construto. A tabela vazia vem sem cabeçalho, então o parse falha
+        # antes de qualquer checagem de coluna.
+        try:
+            sd = pd.read_csv(p, sep="\t")
+        except pd.errors.EmptyDataError:
+            sd = pd.DataFrame()
+        if len(sd) and "peptide" in sd:
+            blocks["shared"] = sd["peptide"].tolist()
+        else:
+            log.warning("bloco compartilhado VAZIO — o construto sai sem a tese central")
 
     k = cfg.get("construct", {}).get("dedup_kmer")
     if k:
