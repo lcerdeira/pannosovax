@@ -114,6 +114,9 @@ def main() -> None:
     ap.add_argument("--window", type=int, default=9)
     ap.add_argument("--min-plddt", type=float, default=70.0)
     ap.add_argument("--tm", type=float, default=0.5)
+    ap.add_argument("--min-partners", type=int, default=2,
+                    help="organismos parceiros exigidos por região: 2 = compartilhada "
+                         "pelos três patógenos; 1 = compartilhada por um par")
     ap.add_argument("--config", default=None)
     args = ap.parse_args()
     load_config(args.config)
@@ -172,12 +175,12 @@ def main() -> None:
         multi = [{"organism": v["organism"], "protein": v["protein"], "peptide": v["peptide"],
                   "res_start": v["res_start"], "n_partner_orgs": len(v["partners"]),
                   "partner_orgs": "|".join(sorted(v["partners"]))}
-                 for v in cover.values() if len(v["partners"]) >= 2]
+                 for v in cover.values() if len(v["partners"]) >= args.min_partners]
         mdf = pd.DataFrame(multi).sort_values("n_partner_orgs", ascending=False) if multi else pd.DataFrame()
         mout = ROOT / "results/04_shared/shared_regions_v2.tsv"
         mdf.to_csv(mout, sep="\t", index=False)
-        log.info("regiões cobrindo >=3 organismos (2 parceiros): %d -> %s",
-                 len(mdf), mout.name)
+        log.info("regiões com >=%d organismo(s) parceiro(s): %d -> %s",
+                 args.min_partners, len(mdf), mout.name)
 
 
 if __name__ == "__main__":
