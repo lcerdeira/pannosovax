@@ -72,7 +72,11 @@ def resolve_n_genomes_total(cfg) -> str | None:
             log.info("  n_genomes_total: falta %s_selected.tsv", org)
             return None
         total += n
-    return f"{total:,}".replace(",", ".")
+    # Separador de milhar em inglês (vírgula), não o brasileiro (ponto) — mesmo
+    # ponto que resolve_n_surface_total tinha, escondido aqui: "1.056" no
+    # manuscrito em inglês lê como "um vírgula zero cinco seis", não "mil e
+    # cinquenta e seis". n_core_total (abaixo) já usava vírgula; este não.
+    return f"{total:,}"
 
 
 def resolve_md_ns(cfg) -> str | None:
@@ -88,10 +92,22 @@ def resolve_md_ns(cfg) -> str | None:
 def stage_counts(cfg) -> dict[str, int]:
     counts: dict[str, int] = {}
     for org in cfg["organisms"]:
+        # presence.tsv NÃO é só genes core: é o proteoma de referência inteiro, com
+        # uma coluna booleana `is_core`. Contar linhas (n_rows) em vez de somar
+        # `is_core` inflou "core_{org}" para o total de genes testados — para kpsc,
+        # 5865 em vez dos 3803 que de fato são core. Isso produzia uma tabela de
+        # resultados (secao_resultados) cuja soma (11975) contradizia o próprio
+        # n_core_total (7841, correto) duas linhas abaixo no manuscrito — o tipo de
+        # inconsistência que salta aos olhos de qualquer revisor.
+        p = outpath(cfg, "02_pangenome", f"{org}_presence.tsv")
+        if p.exists():
+            try:
+                n_core = int(pd.read_csv(p, sep="\t")["is_core"].fillna(False).astype(bool).sum())
+                if n_core:
+                    counts[f"core_{org}"] = n_core
+            except Exception:
+                pass
         for key, sub, fname in [
-            # presence.tsv é a saída real do core genome (02_core_genome_blast.py);
-            # gene_presence_absence.csv era do panaroo, que nunca rodou neste pipeline.
-            (f"core_{org}", "02_pangenome", f"{org}_presence.tsv"),
             (f"cand_{org}", "03_surfaceome", f"{org}_candidates.tsv"),
             (f"sel_{org}", "04_selection", f"{org}_dnds.tsv"),
         ]:
@@ -161,26 +177,26 @@ def resolve_n_core_total(cfg) -> str | None:
             total += int(pd.read_csv(p, sep="\t")["is_core"].fillna(False).astype(bool).sum())
         except Exception:
             return None
-    return f"{total:,}".replace(",", ",") if total else None
+    return f"{total:,}" if total else None
 
 
 def resolve_n_surface_total(cfg) -> str | None:
     """Proteínas em compartimento acessível a anticorpo, somando os organismos.
 
-    Lê a saída do preditor de localização (DeepLocPro, gravada no formato PSORTb),
-    aplicando as localizações permitidas por tipo de parede declaradas no config.
+    Lê `{org}_candidates.tsv` — a saída final e autoritativa do estágio 03 (a coluna
+    `candidate` do filtro completo, ver scripts/03_surfaceome_filter.py) — em vez de
+    reimplementar a regra de localização aqui. A versão anterior reimplementava:
+    aceitava só as localizações "puras" do config (`gram_negative_ok`/
+    `gram_positive_ok`) e ignorava tanto a recuperação de Gram-positivo ancorado
+    quanto a exclusão por anotação citoplasmática (estágio 03e). Isso a deixou
+    desincronizada da correção do surfaceome: devolvia 475 (número do surfaceome
+    ANTIGO, keyword-based, citado como limitação no §2.2) quando o valor correto,
+    coerente com `results_summary` e `secao_resultados`, é 254. Publicar 475 aqui
+    teria reintroduzido silenciosamente, no próprio manuscrito, o mesmo erro que o
+    pipeline foi corrigido para não cometer.
     """
-    import re
-    surf_ok = {"kpsc": set(cfg["surfaceome"]["gram_negative_ok"]),
-               "abau": set(cfg["surfaceome"]["gram_negative_ok"]),
-               "spneu": set(cfg["surfaceome"]["gram_positive_ok"])}
-    total = 0
-    for org in cfg["organisms"]:
-        p = outpath(cfg, "03_surfaceome", f"{org}_psortb.tsv")
-        if not p.exists():
-            return None
-        hits = re.findall(r"SeqID: (\S+)\n  Final Prediction:\n  (\S+) ([\d.]+)", p.read_text())
-        total += sum(1 for _, loc, _ in hits if loc in surf_ok.get(org, set()))
+    c = stage_counts(cfg)
+    total = sum(c.get(f"cand_{org}", 0) for org in cfg["organisms"])
     return str(total) if total else None
 
 
