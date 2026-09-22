@@ -106,25 +106,31 @@ def stage_counts(cfg) -> dict[str, int]:
 
 
 def resolve_results_summary(cfg) -> str | None:
+    # Os dois manuscritos ativos (Paper A e Paper B, em manuscript/npj-vaccines/ e
+    # manuscript/bioinformatics-appnote/) estão em inglês; manuscript_pt_base.md é um
+    # rascunho legado sem commits desde o inicial. Antes esta função escrevia em
+    # português direto no marcador do manuscrito em inglês — passou despercebido
+    # porque ninguém tinha rodado o preenchimento de ponta a ponta ainda.
     c = stage_counts(cfg)
     if not c:
         return None
     parts = []
     for org in cfg["organisms"]:
         if f"cand_{org}" in c:
-            parts.append(f"{org}: {c[f'cand_{org}']} candidatos de superfície"
-                         + (f", {c[f'sel_{org}']} sob seleção purificadora"
+            label = cfg["organisms"][org]["label"]
+            parts.append(f"*{label}*: {c[f'cand_{org}']} surface candidates"
+                         + (f", {c[f'sel_{org}']} under purifying selection"
                             if f"sel_{org}" in c else ""))
     n_ep = c.get("mhc1", 0) + c.get("mhc2", 0)
     if n_ep:
-        parts.append(f"{n_ep} epitopos MHC selecionados por cobertura populacional")
+        parts.append(f"{n_ep} MHC epitopes selected by population coverage")
     prop = outpath(cfg, "09_physchem", "construct_properties.tsv")
     if prop.exists():
         try:
             df = pd.read_csv(prop, sep="\t")
             row = df.iloc[0].to_dict() if len(df) else {}
             if "length" in row:
-                parts.append(f"construto final de {int(row['length'])} aa")
+                parts.append(f"a final construct of {int(row['length'])} aa")
         except Exception:
             pass
     return "; ".join(parts) + "." if parts else None
@@ -134,12 +140,12 @@ def resolve_secao_resultados(cfg) -> str | None:
     c = stage_counts(cfg)
     if not c:
         return None
-    lines = ["| Organismo | Genes core | Candidatos de superfície | Aprovados na seleção |",
+    lines = ["| Organism | Core genes | Surface candidates | Passed selection |",
              "|---|---|---|---|"]
     for org in cfg["organisms"]:
         if f"cand_{org}" not in c:
             continue
-        lines.append(f"| {cfg['organisms'][org]['label']} | {c.get(f'core_{org}', '—')} "
+        lines.append(f"| *{cfg['organisms'][org]['label']}* | {c.get(f'core_{org}', '—')} "
                      f"| {c[f'cand_{org}']} | {c.get(f'sel_{org}', '—')} |")
     return "\n".join(lines) if len(lines) > 2 else None
 
@@ -193,8 +199,8 @@ def resolve_cobertura_resumo(cfg) -> str | None:
             continue
         w = 100 * d["set_coverage_world"].max()
         b = 100 * d["set_coverage_brazil"].max()
-        parts.append(f"{label}: {len(d)} epitopos, cobertura de {w:.1f}% (mundo) "
-                     f"e {b:.1f}% (Brasil)")
+        parts.append(f"{label}: {len(d)} epitopes, {w:.1f}% coverage (world) "
+                     f"and {b:.1f}% (Brazil)")
     return "; ".join(parts) + "." if parts else None
 
 
@@ -209,19 +215,21 @@ def resolve_construto_resumo(cfg) -> str | None:
             n = b.get("n_epitopes")
             bl = b.get("blocks", {})
             if n:
-                parts.append(f"O construto final reúne {n} epitopos "
-                             f"({len(bl.get('bcell', []))} de célula B, "
+                parts.append(f"The final construct carries {n} epitopes "
+                             f"({len(bl.get('bcell', []))} B-cell, "
                              f"{len(bl.get('mhc2', []))} MHC-II, "
-                             f"{len(bl.get('mhc1', []))} MHC-I)")
+                             f"{len(bl.get('mhc1', []))} MHC-I"
+                             + (f", {len(bl['shared'])} structurally shared"
+                                if bl.get("shared") else "") + ")")
         except Exception:
             pass
     prop = outpath(cfg, "09_physchem", "construct_properties.tsv")
     if prop.exists():
         try:
             r = pd.read_csv(prop, sep="\t").iloc[0]
-            parts.append(f"totalizando {int(r['length'])} aa e {r['molecular_weight_kda']:.1f} kDa, "
-                         f"com pI {r['theoretical_pi']:.2f}, índice de instabilidade "
-                         f"{r['instability_index']:.1f} e {int(r['n_cysteine'])} cisteínas livres")
+            parts.append(f"totalling {int(r['length'])} aa and {r['molecular_weight_kda']:.1f} kDa, "
+                         f"with pI {r['theoretical_pi']:.2f}, instability index "
+                         f"{r['instability_index']:.1f} and {int(r['n_cysteine'])} free cysteines")
         except Exception:
             pass
     return ", ".join(parts) + "." if parts else None
