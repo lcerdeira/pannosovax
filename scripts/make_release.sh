@@ -83,7 +83,25 @@ if command -v gh >/dev/null 2>&1; then
   fi
 fi
 
-# 8. A tag não pode já existir — mover tag publicada quebra quem já a buscou.
+# 8. Zenodo só arquiva releases publicados DEPOIS de a integração estar ligada.
+#    Ligar depois não captura o que já saiu, e a única saída seria queimar a próxima
+#    versão. O Zenodo instala um webhook no repo ao ser ativado, então a ausência de
+#    qualquer webhook é evidência de que a integração não está ligada.
+if command -v gh >/dev/null 2>&1; then
+  hooks=$(gh api "repos/$(gh repo view --json nameWithOwner -q .nameWithOwner)/hooks" \
+            --jq '[.[] | select(.config.url | test("zenodo"; "i"))] | length' 2>/dev/null || echo "?")
+  if [[ "$hooks" == "?" ]]; then
+    printf '  \033[33mAVISO\033[0m não consegui verificar o webhook do Zenodo\n'
+  elif [[ "$hooks" == "0" ]]; then
+    bad "integração Zenodo-GitHub não está ligada — o release sairia sem DOI"
+    printf '        ligue em zenodo.org (Account > GitHub) ANTES da tag; o Zenodo não\n'
+    printf '        captura releases publicados antes da ativação\n'
+  else
+    ok "webhook do Zenodo presente"
+  fi
+fi
+
+# 9. A tag não pode já existir — mover tag publicada quebra quem já a buscou.
 ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null && ok "tag $TAG ainda não existe localmente" \
   || bad "a tag $TAG já existe — escolha a próxima versão"
 
