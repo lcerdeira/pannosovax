@@ -96,6 +96,15 @@ def main() -> None:
     #
     # O par K. pneumoniae x A. baumannii não entra: são duas Gammaproteobacteria e
     # respondem por 2423 das 2682 janelas. Encheria o bloco com o resultado esperado.
+    def pair_key(row) -> str:
+        # Par não-ordenado (organism, partner) que sustenta a região. Precisa disso
+        # separado de "nivel" porque o nível 2 mistura kpsc+spneu e abau+spneu, e
+        # ordenar só por profundidade os dois juntos deixa o mais raso desaparecer
+        # atrás do mais fundo — no caso, spneu+abau (mais profundo) engolia todas as
+        # vagas e kpsc+spneu (182 janelas, o par mais numeroso) não entrava em nenhuma.
+        orgs = tuple(sorted({row["organism"], *str(row["partner_orgs"]).split("|")}))
+        return "|".join(orgs)
+
     frames = []
     for fname, tier in [(args.source_3way, "tres_patogenos"),
                         (args.source, "par_cruza_gram")]:
@@ -110,13 +119,37 @@ def main() -> None:
         if tier == "par_cruza_gram":
             f = f[f["cruza_gram"]]
         f["nivel"] = tier
-        frames.append(f.sort_values("n_epitopos_seguros_na_regiao", ascending=False))
+        f["pair_key"] = f.apply(pair_key, axis=1)
+        frames.append(f)
     if not frames:
         raise SystemExit("faltam as tabelas do 04b2 — rode o estágio 04")
 
+    def diversify(f: pd.DataFrame) -> pd.DataFrame:
+        """Intercala os pares dentro do nível, cada um ordenado por profundidade.
+
+        Sem isso, o par mais profundo (mais regiões densas) ocupa as vagas todas e um
+        par com menos regiões, ainda que real, nunca aparece no construto -- foi o que
+        aconteceu com kpsc+spneu (o par mais numeroso, 182 janelas) perante
+        spneu+abau. Round-robin por par garante que cada par tenha chance na fila,
+        preservando a ordenação por profundidade DENTRO de cada par.
+        """
+        groups = [g.sort_values("n_epitopos_seguros_na_regiao", ascending=False)
+                  for _, g in f.groupby("pair_key", sort=False)]
+        if len(groups) <= 1:
+            return f.sort_values("n_epitopos_seguros_na_regiao", ascending=False)
+        rows, i = [], 0
+        while any(len(g) > i for g in groups):
+            for g in groups:
+                if len(g) > i:
+                    rows.append(g.iloc[i])
+            i += 1
+        return pd.DataFrame(rows)
+
+    frames = [diversify(f) for f in frames]
     d = pd.concat(frames, ignore_index=True)
     for tier, g in d.groupby("nivel", sort=False):
-        log.info("nível '%s': %d regiões candidatas", tier, len(g))
+        pares = g["pair_key"].value_counts().to_dict()
+        log.info("nível '%s': %d regiões candidatas, pares: %s", tier, len(g), pares)
 
     # pool de k-mers dos blocos já existentes (evita dupla contagem do mesmo determinante)
     pool = set()
@@ -148,6 +181,7 @@ def main() -> None:
                      "n_safe_in_region": int(r["n_epitopos_seguros_na_regiao"]),
                      "cruza_gram": bool(r["cruza_gram"]),
                      "nivel": r["nivel"],
+                     "pair_key": r["pair_key"],
                      "note": "regiao estruturalmente compartilhada (TM>=0.5)"})
         if len(picked) >= args.n:
             break
