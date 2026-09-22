@@ -49,6 +49,8 @@ SOURCES = {
     "md_ns": "config/config.yaml (md.ns)",
     "results_summary": "results/07_coverage/selected_*.tsv + results/09_physchem/*",
     "secao_resultados": "results/0*/*.tsv (contagens dos estágios 02-08)",
+    "bloco_compartilhado_resumo": "results/04_shared/shared_structural_epitopes.tsv (04c)",
+    "mecanismo_estrutural": "results/04_shared/asymmetry_summary.tsv (04e)",
 }
 
 
@@ -225,6 +227,78 @@ def resolve_construto_resumo(cfg) -> str | None:
     return ", ".join(parts) + "." if parts else None
 
 
+def resolve_bloco_compartilhado_resumo(cfg) -> str | None:
+    """Descreve o bloco compartilhado por nível, a partir da tabela que o 04c grava.
+
+    Não hardcoda contagem nem proteínas: lê `nivel` e `pair_key` de
+    `shared_structural_epitopes.tsv`, que é a mesma tabela que o construto usa.
+    """
+    p = outpath(cfg, "04_shared", "shared_structural_epitopes.tsv")
+    if not p.exists():
+        return None
+    try:
+        d = pd.read_csv(p, sep="\t")
+    except Exception:
+        return None
+    if not len(d) or "nivel" not in d.columns:
+        return None
+
+    NAMES = {"kpsc": "*K. pneumoniae*", "abau": "*A. baumannii*", "spneu": "*S. pneumoniae*"}
+    def pair_label(pk: str) -> str:
+        return " and ".join(NAMES.get(o, o) for o in str(pk).split("|"))
+
+    parts = []
+    three = d[d["nivel"] == "tres_patogenos"]
+    if len(three):
+        parts.append(f"{len(three)} epitope(s) fall in a region structurally shared by "
+                     f"all three pathogens")
+    pair = d[d["nivel"] == "par_cruza_gram"]
+    if len(pair):
+        by_pair = pair["pair_key"].value_counts()
+        detail = "; ".join(f"{n} anchored in {pair_label(pk)}" for pk, n in by_pair.items())
+        parts.append(f"{len(pair)} additional epitope(s) are shared between exactly one "
+                     f"Gram-negative pathogen and *S. pneumoniae* ({detail})")
+    if not parts:
+        return None
+    return "; ".join(parts) + f"; none are shared between the two Gram-negatives alone. " \
+        f"All {len(d)} cross a Gram-positive/Gram-negative boundary."
+
+
+def resolve_mecanismo_estrutural(cfg) -> str | None:
+    """Fração de janelas estruturais dominadas por uma classe funcional, por par.
+
+    Fonte: results/04_shared/asymmetry_summary.tsv, escrito por
+    scripts/04e_analyze_asymmetry.py — não recalculado nem digitado aqui.
+    """
+    p = outpath(cfg, "04_shared", "asymmetry_summary.tsv")
+    if not p.exists():
+        return None
+    try:
+        d = pd.read_csv(p, sep="\t")
+    except Exception:
+        return None
+    if not len(d):
+        return None
+    NAMES = {"kpsc": "*K. pneumoniae*", "abau": "*A. baumannii*", "spneu": "*S. pneumoniae*"}
+    # scripts/04e_analyze_asymmetry.py classifies in Portuguese (matches the rest of the
+    # pipeline's comments/logs); the manuscript is in English, so translate here rather
+    # than in the analysis script.
+    CLASS_EN = {"ABC substrate-binding": "ABC-transporter substrate-binding proteins",
+               "porina/OM": "outer-membrane porins",
+               "TonB/sideróforo": "TonB-dependent siderophore receptors",
+               "adesina/pilus": "adhesins/pilus proteins",
+               "lipoproteína": "lipoproteins",
+               "peptidase/hidrolase": "peptidases/hydrolases",
+               "outra": "other folds", "nenhuma classe repetida": "no repeated class"}
+    parts = []
+    for r in d.itertuples():
+        cls = CLASS_EN.get(r.classe_dominante, r.classe_dominante)
+        parts.append(f"{NAMES.get(r.org_a, r.org_a)}–{NAMES.get(r.org_b, r.org_b)}: "
+                     f"{r.n_classe_dominante}/{r.n_janelas} windows ({100*r.frac_classe_dominante:.0f}%) "
+                     f"are {cls}")
+    return "; ".join(parts) + "."
+
+
 RESOLVERS = {
     "n_genomes_total": resolve_n_genomes_total,
     "md_ns": resolve_md_ns,
@@ -234,6 +308,8 @@ RESOLVERS = {
     "n_surface_total": resolve_n_surface_total,
     "cobertura_resumo": resolve_cobertura_resumo,
     "construto_resumo": resolve_construto_resumo,
+    "bloco_compartilhado_resumo": resolve_bloco_compartilhado_resumo,
+    "mecanismo_estrutural": resolve_mecanismo_estrutural,
 }
 
 

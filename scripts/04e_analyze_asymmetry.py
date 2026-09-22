@@ -122,11 +122,28 @@ def main() -> int:
     w = w.copy()
     w["classe_a"] = [prod.get(f"{a}:{p}", "?") for a, p in zip(w["org_a"], w["prot_a"])]
     w["classe_b"] = [prod.get(f"{b}:{p}", "?") for b, p in zip(w["org_b"], w["prot_b"])]
+    rows = []
     for (a, b), g in w.groupby(["org_a", "org_b"]):
         print(f"\n  {a} x {b}  ({len(g)} janelas)")
         top = (g.groupby(["classe_a", "classe_b"]).size()
                 .sort_values(ascending=False).head(5))
         print(top.to_string())
+        same_class = g[g["classe_a"] == g["classe_b"]]
+        if len(same_class):
+            dom = same_class["classe_a"].value_counts().idxmax()
+            n_dom = int((same_class["classe_a"] == dom).sum())
+        else:
+            dom, n_dom = "nenhuma classe repetida", 0
+        rows.append({"org_a": a, "org_b": b, "n_janelas": len(g),
+                     "classe_dominante": dom, "n_classe_dominante": n_dom,
+                     "frac_classe_dominante": round(n_dom / len(g), 3)})
+
+    # Persistido para que o manuscrito leia o mecanismo de um TSV, não de texto
+    # digitado à mão — mesma regra que vale para todo outro número no Paper A.
+    out = pd.DataFrame(rows)
+    dst = ROOT / "results/04_shared/asymmetry_summary.tsv"
+    out.to_csv(dst, sep="\t", index=False)
+    log.info("escrito %s", dst)
     return 0
 
 

@@ -99,16 +99,35 @@ panels in use reflect predominantly European allele frequencies. We treat select
 formal maximum-coverage problem and optimise phenotypic coverage weighted by world **and
 admixed Brazilian** allele frequencies, reporting both separately.
 
-### 1.3 An exploratory element: structurally equivalent shared epitopes
+### 1.3 A structurally shared block, graded by the strength of its evidence
 
-The most speculative part of the design. KpSC and *A. baumannii* are Gram-negatives sharing
-outer-membrane protein families with conserved β-barrel folds. *S. pneumoniae* is
-Gram-positive, and sequence homology with the other two is essentially nil. Yet
-functionally analogous surface proteins — adhesins, ABC-transporter substrate-binding
-proteins — may present **conformational epitopes at structurally equivalent positions**
-without sequence-detectable ancestry. We search for such cases by structural superposition
-rather than sequence alignment, and report them as an explicitly labelled hypothesis, not
-as an established result.
+KpSC and *A. baumannii* are Gram-negatives sharing outer-membrane protein families with
+conserved β-barrel folds — structural convergence between them is the expected result and
+carries no news value on its own. *S. pneumoniae* is Gram-positive, has no outer membrane,
+and its sequence homology to the other two is essentially nil. A surface protein shared in
+fold between a Gram-negative and the pneumococcus is therefore a stronger claim: it implies
+conservation across a boundary that separates cell-wall architecture and phylogeny, not
+merely across two related genomes.
+
+We searched for such regions by structural superposition (TM-align) rather than sequence
+alignment, which can find equivalent folds between sequence-divergent proteins that no
+BLAST search would associate. Two grades of evidence emerged, and the construct declares
+each epitope's grade explicitly rather than asserting one grade for the whole block:
+
+**Tier 1 — shared by all three pathogens.** The strongest possible claim, and rare: only
+a handful of regions satisfy it structurally and survive the safety screen intact.
+
+**Tier 2 — shared between exactly one Gram-negative and *S. pneumoniae*, but not between
+the two Gram-negatives.** Weaker than tier 1, but still crosses the Gram boundary, and is
+far more abundant. Regions shared only between the two Gram-negatives were excluded from
+this block by design: KpSC and *A. baumannii* convergence is the expected result, and
+including it would let an unsurprising signal dominate a block whose purpose is to report
+the surprising one.
+
+Both tiers rest on the same caveat: cross-reactivity of a short *linear* epitope derived
+from a structurally equivalent but sequence-divergent region is not established
+immunologically, and this block should be read as a structural-bioinformatics finding that
+motivates experimental testing, not as a validated cross-protective claim.
 
 ---
 
@@ -153,16 +172,28 @@ human proteome, would have carried those epitopes into the construct.
 
 ⟨PENDENTE:construto_resumo⟩ (*Figure 4*)
 
-### 2.6 Structural convergence between pathogens (exploratory)
+### 2.6 A substrate-binding-protein fold bridges the Gram boundary
 
 Surface antigens from the three organisms were compared by structural superposition
-rather than sequence identity (*Figure 5*). Pairs exceeding the TM-score threshold for
-shared fold were dominated by **ABC-transporter substrate-binding proteins**, whose fold is
-conserved across all three species despite low sequence identity.
+rather than sequence identity (*Figure 5*). The three pairwise comparisons behave
+distinctly, and the difference is informative rather than incidental:
+⟨PENDENTE:mecanismo_estrutural⟩
 
-We report this as a hypothesis. Cross-reactivity of short *linear* epitopes derived from
-structurally equivalent but sequence-divergent regions is rare, and we did not include a
-shared block in the construct on this basis alone.
+The pattern has a direct structural reading. **ABC-transporter substrate-binding
+proteins** dominate every comparison that includes *S. pneumoniae*, in both KpSC and
+*A. baumannii* alike — this fold is among the most conserved in bacterial biology,
+independent of cell-wall architecture, and it is what lets a Gram-positive and a
+Gram-negative surface protein occupy equivalent structural space despite negligible
+sequence identity. **Outer-membrane porins**, by contrast, dominate the KpSC–*A.
+baumannii* comparison and are absent from *S. pneumoniae* altogether, which has no outer
+membrane — this is the expected convergence between two Gram-negatives and does not cross
+the boundary that motivates this analysis.
+
+⟨PENDENTE:bloco_compartilhado_resumo⟩ The two-tier structure (§1.3) is a direct
+consequence of this asymmetry: requiring convergence across all three pathogens
+simultaneously is a narrow constraint that few regions satisfy, while requiring it across
+one Gram-negative and the pneumococcus is far more permissive and is where the ABC
+substrate-binding mechanism is expressed at scale.
 
 ---
 
@@ -181,6 +212,16 @@ a plausible route to niche opening, this seems a poor thing to leave unchecked.
 **Ancestry-aware coverage costs nothing and is rarely done.** Reporting world and Brazilian
 coverage separately makes explicit a choice that is usually implicit and Eurocentric.
 
+**The structurally shared block is graded, not uniform, evidence, and this matters for how
+it should be read.** A construct that claimed uniform three-pathogen sharing across its
+whole shared block would be making a claim the data do not support for most of that block:
+convergence across all three pathogens is rare and structurally demanding, while
+convergence between one Gram-negative and *S. pneumoniae* is far more abundant and rests
+on a single identifiable mechanism, the ABC substrate-binding fold. Declaring each
+epitope's tier keeps the construct's strongest claim intact without inflating it with
+weaker evidence, and keeps the mechanism — not merely the observation of overlap —
+available for experimental follow-up.
+
 ### Limitations
 
 This is a computational study; nothing here substitutes for *in vitro* or *in vivo*
@@ -195,8 +236,12 @@ Specific limitations we consider material:
 2. **Allergenicity and toxicity remain pending.** Those tools have no stable API and
    require manual submission; the corresponding layer is reported as PENDING rather than
    passed. Pending is not approval.
-3. **The shared structural block is a hypothesis**, reported as such and not incorporated
-   into the construct.
+3. **The shared structural block rests on structural, not sequence, homology**, and its
+   epitopes are declared with an explicit evidence tier (§1.3, §2.6) precisely because
+   linear-epitope cross-reactivity across structurally equivalent but sequence-divergent
+   regions is not immunologically established. It is a structural-bioinformatics finding
+   that motivates experimental testing, not a validated cross-protective claim, and the
+   construct should not be read as asserting protection from this block alone.
 4. **Purifying-selection analysis (dN/dS) was not performed** in this version, as it
    requires codon-level alignments the light-weight core-genome path does not produce.
 
