@@ -16,7 +16,6 @@ authors:
   - given-names: Sarah
     family-names: Scalercio
     affiliation: "Instituto de Ciência e Tecnologia em Biomodelos (ICTB), Fiocruz"
-    # orcid: "https://orcid.org/0000-0000-0000-0000"   # PREENCHER
 license: GPL-3.0-or-later
 repository-code: "https://github.com/lcerdeira/pannosovax"
 version: "0.1.1"
