@@ -66,17 +66,20 @@ fi
 #    Tem de ser o workflow 'build' especificamente: outros workflows rodam em
 #    ubuntu (grátis e não bloqueado) e passam, mascarando o bloqueio que atinge
 #    os runners macOS/Windows de que o build depende.
+#    Olhamos a última execução CONCLUÍDA, não a mais recente: uma execução ainda
+#    em fila não tem 'conclusion', e ler esse vazio como "não sei" já fez o script
+#    liberar a tag enquanto o build vinha falhando em toda execução concluída.
 if command -v gh >/dev/null 2>&1; then
-  last=$(gh run list --workflow build.yml --limit 1 \
+  last=$(gh run list --workflow build.yml --status completed --limit 1 \
            --json conclusion -q '.[0].conclusion' 2>/dev/null || echo "")
   if [[ "$last" == "failure" ]]; then
-    bad "a última execução do workflow 'build' falhou — a tag não geraria Release"
+    bad "a última execução concluída do 'build' falhou — a tag não geraria Release"
     printf '        se for "account is locked due to a billing issue", resolva em\n'
     printf '        github.com/settings/billing antes de marcar a tag\n'
   elif [[ -z "$last" ]]; then
-    printf '  \033[33mAVISO\033[0m não consegui ler o estado do workflow build\n'
+    bad "não consegui ler o estado do workflow 'build' — confirme antes de marcar a tag"
   else
-    ok "workflow 'build' com última execução em '$last'"
+    ok "última execução concluída do 'build': '$last'"
   fi
 fi
 
